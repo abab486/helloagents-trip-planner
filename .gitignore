@@ -1,0 +1,33 @@
+# 依赖
+node_modules/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 构建产物
+dist/
+build/
+dist-ssr/
+
+# 环境变量（含密钥，切勿提交）
+.env
+.env.local
+.env.*.local
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+*~
+
+# 日志
+*.log
+
+# 操作系统
+.DS_Store
+Thumbs.db
