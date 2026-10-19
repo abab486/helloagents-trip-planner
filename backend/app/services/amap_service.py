@@ -28,8 +28,16 @@ def get_amap_mcp_tool() -> MCPTool:
         _amap_mcp_tool = MCPTool(
             name="amap",
             description="高德地图服务,支持POI搜索、路线规划、天气查询等功能",
-            server_command=["uvx", "amap-mcp-server"],
-            env={"AMAP_MAPS_API_KEY": settings.amap_api_key},
+            # 与 trip_planner_agent 保持一致：锁定 amap-mcp-server 版本并约束 pydantic
+            server_command=[
+                "uvx", "--from", "amap-mcp-server==0.1.11",
+                "--with", "pydantic<2.12", "amap-mcp-server"
+            ],
+            env={
+                "AMAP_MAPS_API_KEY": settings.amap_api_key,
+                # 本机访问 pypi.org 会握手超时，改用清华镜像
+                "UV_DEFAULT_INDEX": "https://pypi.tuna.tsinghua.edu.cn/simple"
+            },
             auto_expand=True  # 自动展开为独立工具
         )
         

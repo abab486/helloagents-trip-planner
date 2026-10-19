@@ -168,8 +168,17 @@ class MultiAgentTripPlanner:
             self.amap_tool = MCPTool(
                 name="amap",
                 description="高德地图服务",
-                server_command=["uvx", "amap-mcp-server"],
-                env={"AMAP_MAPS_API_KEY": settings.amap_api_key},
+                # 锁定版本 + 约束 pydantic：amap-mcp-server 0.1.11 钉死 mcp==1.8.1，
+                # 而 mcp 1.8.1 在 pydantic>=2.12 下会因 eval_type_backport 被移除而启动失败
+                server_command=[
+                    "uvx", "--from", "amap-mcp-server==0.1.11",
+                    "--with", "pydantic<2.12", "amap-mcp-server"
+                ],
+                env={
+                    "AMAP_MAPS_API_KEY": settings.amap_api_key,
+                    # 本机访问 pypi.org 会握手超时，改用清华镜像
+                    "UV_DEFAULT_INDEX": "https://pypi.tuna.tsinghua.edu.cn/simple"
+                },
                 auto_expand=True
             )
             self.amap_tool.expandable=True
