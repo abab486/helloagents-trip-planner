@@ -15,6 +15,7 @@
 | `uvx` 是否可用 | 终端执行 `uvx --version` | 输出版本号，而不是「找不到命令」 |
 | PyPI 是否可达 | 终端访问 `https://pypi.org/simple/` | 能打开；国内网络常超时，需换镜像 |
 | 后端环境变量 | `backend/.env` 是否存在 | 含 `AMAP_API_KEY`、`LLM_API_KEY` 等 |
+| 历史消息是否清空 | 连续请求两次，看第二次的 Prompt | 不含上一次的城市/行程；输入 Token 不随请求次数上涨 |
 
 ---
 
@@ -129,6 +130,81 @@ agent_tools = [16, 16, 16]
 3. **`uvx` 必须在 PATH 上**：本项目已把 `F:\agent\env313\Scripts` 加入用户 PATH。若在 IDE 里直接运行，确认解释器所在环境的 `Scripts` 目录在 PATH 中，否则会报 `WinError 2`。
 4. **首次启动会联网**：第一次跑会下载 `amap-mcp-server` 及依赖，之后走 uv 缓存；首次启动慢是正常的。
 5. **静默降级最危险**：依赖库把连接失败变成「没有工具」，表现为模型乱编工具名，容易误判成提示词问题。排查时应优先确认 `_available_tools` 是否为空。
+
+---
+
+## 002 单次请求的 Token 越跑越高（历史消息累积）
+
+- **发现时间**：2026-10-19
+- **影响范围**：所有 `/api/trip/plan` 请求；后端进程持续运行越久，单次请求越慢、越贵
+- **状态**：已修复
+
+### 现象
+
+1. 控制台上的用量明显偏高（累计达到几十万 Token），但代码里看不出哪里在重复烧 Token。
+2. 同一个后端进程，请求次数越多，单次请求的输入 Token 越大；重启后端后恢复正常，跑十几次又开始变慢。
+3. 请求 A 城市之后紧接着请求 B 城市，生成结果可能带上 A 城市的景点、价格或酒店。
+
+### 根因
+
+Agent 是**单例**，而 `_history` **只增不清**，每次请求都把全部历史重新发给模型。
+
+调用链（`hello_agents` 库）：
+
+```
+SimpleAgent.run()
+  ├─ messages = [system] + self._history + [本次用户输入]   # 历史全量重放
+  ├─ while 循环：最多 max_tool_iterations=3 轮
+  └─ 结束时 add_message(user) + add_message(assistant)        # 每次多 2 条
+```
+
+叠加项目侧的两个事实：
+
+- `get_trip_planner_agent()` 返回单例，进程不重启，Agent 就一直在（`backend/app/api/routes/trip.py`）；
+- 项目里从未调用过 `clear_history()`，`Config.max_history_length` 只有定义、库并未实现裁剪。
+
+**所以 46 万 Token 不是单次请求内部循环造成的**：单次最多 3 轮工具调用，量级只有几万；真正的原因是历史跨请求累积，且每次都整段重放。
+
+### 关键证据
+
+- 实测同一个 Agent 连续跑 5 次：历史变成 10 条，每次调用发送的消息数为 `2 → 4 → 6 → 8 → 10`，线性增长。
+- 每次请求往历史里写入约 **4239 Token**，其中最大头是 Planner 自己的 JSON 输出（约 **2853 Token**）——下一次请求会把它原样带上。
+- 按此增长，第 10 次请求 Planner 输入约 2.6 万 Token，第 20 次约 5.5 万 Token；累计 20 次请求约 55 万 Token。
+
+### 解决
+
+在 `plan_trip()` 开头清空四个 Agent 的历史，让每次请求都是干净上下文：
+
+```python
+for agent in (
+    self.attraction_agent,
+    self.weather_agent,
+    self.hotel_agent,
+    self.planner_agent,
+):
+    agent.clear_history()
+```
+
+### 验证
+
+用假 LLM 连续发两次不同城市的请求（镇江 → 苏州）：
+
+```
+RUN1 planner_msgs = 2   history = 2
+RUN2 planner_msgs = 2   history = 2
+RUN2 contains_zhenjiang = False
+RUN2 contains_suzhou = True
+```
+
+第二次请求的消息数仍是 2（system + 本次输入），历史没有累积，Prompt 里也不再有上一个城市的内容。修复前第二次会是 4 条消息且包含「镇江」。
+
+### 经验
+
+1. **单例 + 有状态 Agent 必须显式 reset**：库不会自动清理，`clear_history()` 要自己调。
+2. **不要用 Prompt 限制代替代码修复**：在提示词里写「禁止多轮搜索」只能影响单次循环的 3 轮，压不住历史回放，还会降低数据覆盖。
+3. **滑动窗口在这个项目里不划算**：窗口最小单位是一轮对话（约 2800+ Token），比压缩后的上下文（约 320 Token）大近 10 倍，而且仍会把上一个城市的行程带进来。
+4. **多发散问句先量再说**：判断「是不是循环爆炸」要看单次 run 的调用上限，判断「是不是历史累积」要看连续请求的消息数。
+5. **将来若做对话式改行程**，用 `session_id + 结构化状态（当前 TripPlan + 约束）`，不要复用 `agent._history`。
 
 ---
 

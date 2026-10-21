@@ -5,6 +5,7 @@ from typing import Dict, Any, List
 from hello_agents import SimpleAgent
 from hello_agents.tools import MCPTool
 from ..services.llm_service import get_llm
+from ..services.context_builder import ContextBuilder
 from ..models.schemas import TripRequest, TripPlan, DayPlan, Attraction, Meal, WeatherInfo, Location, Hotel
 from ..config import get_settings
 
@@ -163,6 +164,9 @@ class MultiAgentTripPlanner:
             settings = get_settings()
             self.llm = get_llm()
 
+            # 上下文构建器：把子 Agent 的长文本压缩后再交给 Planner
+            self.context_builder = ContextBuilder(max_token_budget=4000)
+
             # 创建共享的MCP工具(只创建一次)
             print("  - 创建共享MCP工具...")
             self.amap_tool = MCPTool(
@@ -240,6 +244,16 @@ class MultiAgentTripPlanner:
             旅行计划
         """
         try:
+            # 清空历史：Agent 是单例，_history 会跨请求累积并被整段重放，
+            # 不清理会让 Prompt 随请求次数线性膨胀（且把上一个城市的行程带进来）
+            for agent in (
+                self.attraction_agent,
+                self.weather_agent,
+                self.hotel_agent,
+                self.planner_agent,
+            ):
+                agent.clear_history()
+
             print(f"\n{'='*60}")
             print(f"🚀 开始多智能体协作规划旅行...")
             print(f"目的地: {request.city}")
@@ -266,9 +280,16 @@ class MultiAgentTripPlanner:
             hotel_response = self.hotel_agent.run(hotel_query)
             print(f"酒店搜索结果: {hotel_response[:200]}...\n")
 
-            # 步骤4: 行程规划Agent整合信息生成计划
+            # 步骤4: 行程规划Agent整合信息生成计划（长文本先压缩，控制 Token 消耗）
             print("📋 步骤4: 生成行程计划...")
-            planner_query = self._build_planner_query(request, attraction_response, weather_response, hotel_response)
+            planner_query = self.context_builder.build_planner_context(
+                request, attraction_response, weather_response, hotel_response
+            )
+            stats = self.context_builder.last_stats
+            print(
+                f"   上下文压缩: {stats['tokens_before']} -> {stats['tokens_after']} tokens"
+                f"（景点 {stats['attractions']} / 天气 {stats['weather']} / 酒店 {stats['hotels']}）"
+            )
             planner_response = self.planner_agent.run(planner_query)
             print(f"行程规划结果: {planner_response[:300]}...\n")
 
@@ -300,40 +321,6 @@ class MultiAgentTripPlanner:
         query = f"请使用amap_maps_text_search工具搜索{request.city}的{keywords}相关景点。\n[TOOL_CALL:amap_maps_text_search:keywords={keywords},city={request.city}]"
         return query
 
-    def _build_planner_query(self, request: TripRequest, attractions: str, weather: str, hotels: str = "") -> str:
-        """构建行程规划查询"""
-        query = f"""请根据以下信息生成{request.city}的{request.travel_days}天旅行计划:
-
-**基本信息:**
-- 城市: {request.city}
-- 日期: {request.start_date} 至 {request.end_date}
-- 天数: {request.travel_days}天
-- 交通方式: {request.transportation}
-- 住宿: {request.accommodation}
-- 偏好: {', '.join(request.preferences) if request.preferences else '无'}
-
-**景点信息:**
-{attractions}
-
-**天气信息:**
-{weather}
-
-**酒店信息:**
-{hotels}
-
-**要求:**
-1. 每天安排2-3个景点
-2. 每天必须包含早中晚三餐
-3. 每天推荐一个具体的酒店(从酒店信息中选择)
-3. 考虑景点之间的距离和交通方式
-4. 返回完整的JSON格式数据
-5. 景点的经纬度坐标要真实准确
-"""
-        if request.free_text_input:
-            query += f"\n**额外要求:** {request.free_text_input}"
-
-        return query
-    
     def _parse_response(self, response: str, request: TripRequest) -> TripPlan:
         """
         解析Agent响应
