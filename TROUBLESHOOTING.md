@@ -17,6 +17,7 @@
 | 后端环境变量 | `backend/.env` 是否存在 | 含 `AMAP_API_KEY`、`LLM_API_KEY` 等 |
 | 历史消息是否清空 | 连续请求两次，看第二次的 Prompt | 不含上一次的城市/行程；输入 Token 不随请求次数上涨 |
 | 预算上限是否生效 | 表单填 1000 后生成计划 | 结果页显示「超出/结余」；后端日志有「预算上限: 1000 元」 |
+| 子 Agent 是否并行 | 看日志里 `[景点]`/`[天气]`/`[酒店]` 的完成耗时 | 三者耗时接近，总耗时 ≈ 最大值而不是累加 |
 
 ---
 
@@ -322,6 +323,124 @@ RUN2 contains_suzhou = True
 5. **参数与结论分层**：`budget_limit` 是用户输入，`over_budget` 是系统结论；混成一个字段，前端就分不清谁负责。
 6. **提示要可行动**：只说「超支 35 元」不够，还要告诉用户「换景点 / 调住宿 / 减正餐」。
 7. **先量再做**：改造前先用真实行程跑一遍，记录 1315 与各项来源，改造后才能用同一份数据证明 1035 和命中率——面试时这比「我加了数据库」有说服力得多。
+
+---
+
+## 004 三个子 Agent 串行执行，还把事件循环堵了 57 秒
+
+- **发现时间**：2026-10-22
+- **影响范围**：`/api/trip/plan` 全链路；请求期间整个服务不可用
+- **状态**：已修复
+
+### 现象
+
+1. 一次规划端到端 **56.9 秒**，日志严格按「步骤1 → 步骤2 → 步骤3」顺序输出，后一步必须等前一步结束。
+2. 请求进行中，其他接口（包括 `/health`）完全没有响应——整个进程像卡死一样。
+3. 三个子 Agent 的任务其实互不依赖：景点、天气、酒店都只需要城市和偏好，没有先后关系。
+
+### 根因
+
+两层问题叠加：
+
+**第一层：同步执行**
+
+```python
+def plan_trip(self, request):          # 普通 def
+    attraction = self.attraction_agent.run(...)   # 串行
+    weather = self.weather_agent.run(...)
+    hotel = self.hotel_agent.run(...)
+```
+
+**第二层：异步路由里跑同步重活**
+
+```python
+async def plan_trip(request):          # async 路由
+    trip_plan = agent.plan_trip(request)  # 同步调用，阻塞事件循环
+```
+
+FastAPI 的 `async def` 路由跑在事件循环上。里面调用一个耗时 57 秒的同步函数，等于把整个事件循环锁死 57 秒——期间所有请求都排队，`/health` 也会超时。
+
+### 解决
+
+**1. `plan_trip` 改为 `async def`，三个子 Agent 并行**
+
+```python
+results = await asyncio.gather(
+    self._run_agent_async("景点", self.attraction_agent, ...),
+    self._run_agent_async("天气", self.weather_agent, ...),
+    self._run_agent_async("酒店", self.hotel_agent, ...),
+    return_exceptions=True,
+)
+```
+
+**2. 同步 Agent 放进线程池，并加超时**
+
+```python
+async def _run_agent_async(self, label, agent, query):
+    started = time.perf_counter()
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(agent.run, query),
+            timeout=AGENT_TIMEOUT_SECONDS,   # 90s
+        )
+        print(f"   [{label}] 完成，耗时 {time.perf_counter() - started:.1f}s")
+        return result
+    except asyncio.TimeoutError:
+        print(f"   [{label}] 超时（>{AGENT_TIMEOUT_SECONDS}s）")
+        raise
+```
+
+**3. 失败隔离**
+
+`return_exceptions=True` + `_normalize_agent_result`：某个 Agent 超时或异常时降级为空字符串，ContextBuilder 会把对应段落写成「未获取到数据」，整体请求仍能返回计划。
+
+**4. Planner 也放进线程池，路由改为 `await`**
+
+```python
+planner_response = await asyncio.to_thread(self.planner_agent.run, planner_query)
+...
+trip_plan = await agent.plan_trip(request)
+```
+
+同时把 `get_trip_planner_agent()` 也改成 `await asyncio.to_thread(...)`，避免首次请求初始化 MCP 时再次阻塞事件循环。
+
+### 验证
+
+真实请求（镇江 3 天，公共交通，经济型酒店）的日志：
+
+```
+   [天气] 完成，耗时 5.1s
+   [景点] 完成，耗时 6.3s
+   [酒店] 完成，耗时 7.4s
+✅ 三路并行完成，耗时 7.4s
+   规划耗时 22.1s
+   总耗时 29.6s（并行阶段 7.4s）
+```
+
+| 指标 | 改造前 | 改造后 |
+|---|---|---|
+| 端到端 | 56.9s | **29.6s（-48%）** |
+| 三个子 Agent | 串行累计约 18.8s | **并行 7.4s** |
+| 事件循环 | 全程被阻塞 | 全程不阻塞 |
+
+并行段实测 7.4s，正好等于三者最大值，说明确实是并发执行而非排队。
+
+测试新增 3 个用例（`tests/test_plan_trip_parallel.py`）：
+
+1. 三个各耗时 0.3s 的 Agent，总耗时 < 0.75s（串行需要 0.9s 以上）；
+2. 天气 Agent 抛异常，整体仍返回计划，且三个 Agent 都被调用；
+3. Planner 收到的上下文同时包含景点、天气、酒店数据。
+
+全量 **28 个测试通过**。
+
+### 经验
+
+1. **`async def` 里不能跑同步重活**：这是最容易忽略的性能坑。要么用 `asyncio.to_thread`，要么把路由改成普通 `def` 让 FastAPI 自己丢线程池。
+2. **并行前先画依赖图**：这三个 Agent 都只依赖城市，所以可以并行；如果酒店要按景点位置做周边搜索，那它就必须排在景点之后——**能不能并行取决于依赖，不取决于数量**。
+3. **`gather` 默认会短路**：一个任务抛异常，其余结果拿不到。要 `return_exceptions=True` 再逐项降级。
+4. **超时和降级必须成对出现**：只加 `wait_for` 不加降级，超时会让整个请求失败。
+5. **提速后瓶颈会转移**：并行后三个 Agent 只占 7.4s，Planner 的 22.1s 成了新大头，下一步优化要盯着它，而不是继续优化已经很快的部分。
+6. **用 `max` 而不是 `sum` 校验并行**：看日志时，并行段的耗时应该接近单个最慢任务，而不是三者之和；对不上就说明其实还在串行。
 
 ---
 
