@@ -1,6 +1,8 @@
 """多智能体旅行规划系统"""
 
+import asyncio
 import json
+import time
 from typing import Dict, Any, List
 from hello_agents import SimpleAgent
 from hello_agents.tools import MCPTool
@@ -9,6 +11,9 @@ from ..services.context_builder import ContextBuilder
 from ..services.budget_calculator import BudgetCalculator
 from ..models.schemas import TripRequest, TripPlan, DayPlan, Attraction, Meal, WeatherInfo, Location, Hotel
 from ..config import get_settings
+
+# 单个子 Agent 的超时时间（秒）
+AGENT_TIMEOUT_SECONDS = 90
 
 # ============ Agent提示词 ============
 
@@ -237,9 +242,12 @@ class MultiAgentTripPlanner:
             traceback.print_exc()
             raise
     
-    def plan_trip(self, request: TripRequest) -> TripPlan:
+    async def plan_trip(self, request: TripRequest) -> TripPlan:
         """
         使用多智能体协作生成旅行计划
+
+        景点、天气、酒店三个子 Agent 互不依赖，改为并行执行；
+        同步的 agent.run 通过 asyncio.to_thread 放进线程池，避免阻塞事件循环。
 
         Args:
             request: 旅行请求
@@ -266,23 +274,31 @@ class MultiAgentTripPlanner:
             print(f"偏好: {', '.join(request.preferences) if request.preferences else '无'}")
             print(f"{'='*60}\n")
 
-            # 步骤1: 景点搜索Agent搜索景点
-            print("📍 步骤1: 搜索景点...")
-            attraction_query = self._build_attraction_query(request)
-            attraction_response = self.attraction_agent.run(attraction_query)
-            print(f"景点搜索结果: {attraction_response[:200]}...\n")
+            total_start = time.perf_counter()
 
-            # 步骤2: 天气查询Agent查询天气
-            print("🌤️  步骤2: 查询天气...")
-            weather_query = f"请查询{request.city}的天气信息"
-            weather_response = self.weather_agent.run(weather_query)
-            print(f"天气查询结果: {weather_response[:200]}...\n")
+            # 步骤1-3: 三个子 Agent 并行执行（互不依赖）
+            print("🚀 并行调度三个子 Agent（景点 / 天气 / 酒店）...")
+            parallel_start = time.perf_counter()
+            results = await asyncio.gather(
+                self._run_agent_async(
+                    "景点", self.attraction_agent, self._build_attraction_query(request)
+                ),
+                self._run_agent_async(
+                    "天气", self.weather_agent, f"请查询{request.city}的天气信息"
+                ),
+                self._run_agent_async(
+                    "酒店", self.hotel_agent,
+                    f"请搜索{request.city}的{request.accommodation}酒店",
+                ),
+                return_exceptions=True,
+            )
+            parallel_elapsed = time.perf_counter() - parallel_start
 
-            # 步骤3: 酒店推荐Agent搜索酒店
-            print("🏨 步骤3: 搜索酒店...")
-            hotel_query = f"请搜索{request.city}的{request.accommodation}酒店"
-            hotel_response = self.hotel_agent.run(hotel_query)
-            print(f"酒店搜索结果: {hotel_response[:200]}...\n")
+            attraction_response, weather_response, hotel_response = [
+                self._normalize_agent_result(label, value)
+                for label, value in zip(("景点", "天气", "酒店"), results)
+            ]
+            print(f"✅ 三路并行完成，耗时 {parallel_elapsed:.1f}s\n")
 
             # 步骤4: 行程规划Agent整合信息生成计划（长文本先压缩，控制 Token 消耗）
             print("📋 步骤4: 生成行程计划...")
@@ -294,7 +310,10 @@ class MultiAgentTripPlanner:
                 f"   上下文压缩: {stats['tokens_before']} -> {stats['tokens_after']} tokens"
                 f"（景点 {stats['attractions']} / 天气 {stats['weather']} / 酒店 {stats['hotels']}）"
             )
-            planner_response = self.planner_agent.run(planner_query)
+
+            planner_start = time.perf_counter()
+            planner_response = await asyncio.to_thread(self.planner_agent.run, planner_query)
+            print(f"   规划耗时 {time.perf_counter() - planner_start:.1f}s")
             print(f"行程规划结果: {planner_response[:300]}...\n")
 
             # 解析最终计划
@@ -311,6 +330,8 @@ class MultiAgentTripPlanner:
                 )
                 print(f"   预算上限: {trip_plan.budget_limit} 元，{status}")
 
+            print(f"   总耗时 {time.perf_counter() - total_start:.1f}s"
+                  f"（并行阶段 {parallel_elapsed:.1f}s）")
             print(f"{'='*60}")
             print(f"✅ 旅行计划生成完成!")
             print(f"{'='*60}\n")
@@ -325,6 +346,31 @@ class MultiAgentTripPlanner:
             # 备用方案同样走预算重算，保证金额口径一致
             self.budget_calculator.apply(fallback, request)
             return fallback
+
+    async def _run_agent_async(self, label: str, agent, query: str):
+        """在线程池里执行同步 Agent.run，并加上超时与耗时日志"""
+        started = time.perf_counter()
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(agent.run, query),
+                timeout=AGENT_TIMEOUT_SECONDS,
+            )
+            print(f"   [{label}] 完成，耗时 {time.perf_counter() - started:.1f}s")
+            return result
+        except asyncio.TimeoutError:
+            print(f"   [{label}] 超时（>{AGENT_TIMEOUT_SECONDS}s）")
+            raise
+        except Exception as exc:  # noqa: BLE001 - 交给 gather 统一降级
+            print(f"   [{label}] 失败: {exc}")
+            raise
+
+    @staticmethod
+    def _normalize_agent_result(label: str, value) -> str:
+        """把 gather(return_exceptions=True) 的结果归一化为文本"""
+        if isinstance(value, BaseException):
+            print(f"   [{label}] 使用降级内容（{type(value).__name__}）")
+            return ""
+        return value or ""
     
     def _build_attraction_query(self, request: TripRequest) -> str:
         """构建景点搜索查询 - 直接包含工具调用"""

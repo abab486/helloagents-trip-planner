@@ -1,5 +1,7 @@
 """旅行规划API路由"""
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 from ...models.schemas import (
     TripRequest,
@@ -35,13 +37,13 @@ async def plan_trip(request: TripRequest):
         print(f"   天数: {request.travel_days}")
         print(f"{'='*60}\n")
 
-        # 获取Agent实例
+        # 获取Agent实例（首次初始化会启动 MCP，放到线程池避免阻塞事件循环）
         print("🔄 获取多智能体系统实例...")
-        agent = get_trip_planner_agent()
+        agent = await asyncio.to_thread(get_trip_planner_agent)
 
-        # 生成旅行计划
+        # 生成旅行计划（三路 Agent 并行，不能阻塞事件循环）
         print("🚀 开始生成旅行计划...")
-        trip_plan = agent.plan_trip(request)
+        trip_plan = await agent.plan_trip(request)
 
         print("✅ 旅行计划生成成功,准备返回响应\n")
 
