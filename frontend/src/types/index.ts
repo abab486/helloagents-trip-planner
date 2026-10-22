@@ -74,6 +74,8 @@ export interface TripPlan {
   weather_info: WeatherInfo[]
   overall_suggestions: string
   budget?: Budget
+  budget_limit?: number
+  over_budget?: number
 }
 
 export interface TripFormData {
@@ -85,6 +87,7 @@ export interface TripFormData {
   accommodation: string
   preferences: string[]
   free_text_input: string
+  budget_limit?: number | null
 }
 
 export interface TripPlanResponse {

@@ -17,6 +17,7 @@ class TripRequest(BaseModel):
     accommodation: str = Field(..., description="住宿偏好", example="经济型酒店")
     preferences: List[str] = Field(default=[], description="旅行偏好标签", example=["历史文化", "美食"])
     free_text_input: Optional[str] = Field(default="", description="额外要求", example="希望多安排一些博物馆")
+    budget_limit: Optional[int] = Field(default=None, ge=0, description="预算上限(元)，可选", example=1500)
     
     class Config:
         json_schema_extra = {
@@ -148,6 +149,8 @@ class TripPlan(BaseModel):
     weather_info: List[WeatherInfo] = Field(default=[], description="天气信息")
     overall_suggestions: str = Field(..., description="总体建议")
     budget: Optional[Budget] = Field(default=None, description="预算信息")
+    budget_limit: Optional[int] = Field(default=None, description="用户设定的预算上限(元)")
+    over_budget: int = Field(default=0, description="超出预算金额(元)，0 表示未超")
 
 
 class TripPlanResponse(BaseModel):

@@ -143,7 +143,39 @@
           </a-row>
         </div>
 
-        <!-- 第三步:额外要求 -->
+        <!-- 第三步:预算设置 -->
+        <div class="form-section">
+          <div class="section-header">
+            <span class="section-icon">💰</span>
+            <span class="section-title">预算设置</span>
+          </div>
+
+          <a-row :gutter="24">
+            <a-col :span="8">
+              <a-form-item name="budget_limit">
+                <template #label>
+                  <span class="form-label">预算上限（元，可选）</span>
+                </template>
+                <a-input-number
+                  v-model:value="formData.budget_limit"
+                  :min="0"
+                  :step="100"
+                  placeholder="例如: 1500"
+                  size="large"
+                  style="width: 100%"
+                  class="custom-input"
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="16">
+              <div style="color: #8c8c8c; font-size: 13px; line-height: 1.8; padding-top: 34px;">
+                填写后会按门票、酒店、餐饮、交通四项重算预算，并在结果页提示是否超支。
+              </div>
+            </a-col>
+          </a-row>
+        </div>
+
+        <!-- 第四步:额外要求 -->
         <div class="form-section">
           <div class="section-header">
             <span class="section-icon">💬</span>
@@ -229,7 +261,8 @@ const formData = reactive<TripFormState>({
   transportation: '公共交通',
   accommodation: '经济型酒店',
   preferences: [],
-  free_text_input: ''
+  free_text_input: '',
+  budget_limit: null
 })
 
 // 监听日期变化,自动计算旅行天数
@@ -285,7 +318,8 @@ const handleSubmit = async () => {
       transportation: formData.transportation,
       accommodation: formData.accommodation,
       preferences: formData.preferences,
-      free_text_input: formData.free_text_input
+      free_text_input: formData.free_text_input,
+      budget_limit: formData.budget_limit ?? null
     }
 
     const response = await generateTripPlan(requestData)

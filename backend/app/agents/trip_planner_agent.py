@@ -6,6 +6,7 @@ from hello_agents import SimpleAgent
 from hello_agents.tools import MCPTool
 from ..services.llm_service import get_llm
 from ..services.context_builder import ContextBuilder
+from ..services.budget_calculator import BudgetCalculator
 from ..models.schemas import TripRequest, TripPlan, DayPlan, Attraction, Meal, WeatherInfo, Location, Hotel
 from ..config import get_settings
 
@@ -167,6 +168,9 @@ class MultiAgentTripPlanner:
             # 上下文构建器：把子 Agent 的长文本压缩后再交给 Planner
             self.context_builder = ContextBuilder(max_token_budget=4000)
 
+            # 预算计算器：用 MySQL 价格库 + 确定性规则重算金额
+            self.budget_calculator = BudgetCalculator()
+
             # 创建共享的MCP工具(只创建一次)
             print("  - 创建共享MCP工具...")
             self.amap_tool = MCPTool(
@@ -296,6 +300,17 @@ class MultiAgentTripPlanner:
             # 解析最终计划
             trip_plan = self._parse_response(planner_response, request)
 
+            # 用价格库重算预算，覆盖模型给出的金额，并回写每个明细
+            report = self.budget_calculator.apply(trip_plan, request)
+            print(f"   {report.summary()}")
+            if trip_plan.budget_limit:
+                status = (
+                    f"超出 {trip_plan.over_budget} 元"
+                    if trip_plan.over_budget
+                    else "未超预算"
+                )
+                print(f"   预算上限: {trip_plan.budget_limit} 元，{status}")
+
             print(f"{'='*60}")
             print(f"✅ 旅行计划生成完成!")
             print(f"{'='*60}\n")
@@ -306,7 +321,10 @@ class MultiAgentTripPlanner:
             print(f"❌ 生成旅行计划失败: {str(e)}")
             import traceback
             traceback.print_exc()
-            return self._create_fallback_plan(request)
+            fallback = self._create_fallback_plan(request)
+            # 备用方案同样走预算重算，保证金额口径一致
+            self.budget_calculator.apply(fallback, request)
+            return fallback
     
     def _build_attraction_query(self, request: TripRequest) -> str:
         """构建景点搜索查询 - 直接包含工具调用"""

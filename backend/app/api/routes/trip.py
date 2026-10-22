@@ -45,9 +45,13 @@ async def plan_trip(request: TripRequest):
 
         print("✅ 旅行计划生成成功,准备返回响应\n")
 
+        message = "旅行计划生成成功"
+        if trip_plan.budget_limit and trip_plan.over_budget:
+            message = f"旅行计划生成成功，超出预算 {trip_plan.over_budget} 元"
+
         return TripPlanResponse(
             success=True,
-            message="旅行计划生成成功",
+            message=message,
             data=trip_plan
         )
 

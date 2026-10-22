@@ -10,6 +10,11 @@ from dotenv import load_dotenv
 # 首先尝试加载当前目录的.env
 load_dotenv()
 
+# 再加载 local 覆盖配置（数据库等本机敏感配置，已被 .gitignore 忽略）
+_local_env = Path(__file__).resolve().parent.parent / ".env.local"
+if _local_env.exists():
+    load_dotenv(_local_env, override=True)
+
 # 然后尝试加载HelloAgents的.env(如果存在)
 helloagents_env = Path(__file__).parent.parent.parent.parent / "HelloAgents" / ".env"
 if helloagents_env.exists():
@@ -33,6 +38,14 @@ class Settings(BaseSettings):
 
     # 高德地图API配置
     amap_api_key: str = ""
+
+    # MySQL 价格库配置
+    db_enabled: bool = True
+    db_host: str = "127.0.0.1"
+    db_port: int = 3306
+    db_user: str = "root"
+    db_password: str = ""
+    db_name: str = "trip_agent"
 
     # Unsplash API配置
     unsplash_access_key: str = ""

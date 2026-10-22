@@ -105,6 +105,22 @@
                 <span class="total-label">预估总费用</span>
                 <span class="total-value">¥{{ tripPlan.budget.total }}</span>
               </div>
+
+              <div class="budget-limit" v-if="tripPlan.budget_limit">
+                <span class="limit-label">预算上限：¥{{ tripPlan.budget_limit }}</span>
+                <a-tag :color="overBudget > 0 ? 'red' : 'green'">
+                  {{ overBudget > 0 ? `超出 ¥${overBudget}` : `结余 ¥${budgetRemaining}` }}
+                </a-tag>
+              </div>
+
+              <a-alert
+                v-if="overBudget > 0"
+                type="warning"
+                show-icon
+                class="budget-alert"
+                :message="`当前方案超出预算 ¥${overBudget}`"
+                description="可以尝试替换门票较高的景点、调整住宿档位，或减少一顿正餐来压缩开支。"
+              />
             </a-card>
           </div>
 
@@ -308,7 +324,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
@@ -325,6 +341,14 @@ const attractionPhotos = ref<Record<string, string>>({})
 const activeSection = ref('overview')
 const activeDays = ref<number[]>([0]) // 默认展开第一天
 let map: any = null
+
+// 预算上限相关
+const overBudget = computed(() => tripPlan.value?.over_budget ?? 0)
+const budgetRemaining = computed(() => {
+  const plan = tripPlan.value
+  if (!plan?.budget_limit || !plan?.budget) return 0
+  return Math.max(plan.budget_limit - plan.budget.total, 0)
+})
 
 onMounted(async () => {
   const data = sessionStorage.getItem('tripPlan')
@@ -1210,6 +1234,24 @@ const drawRoutes = (AMap: any, attractions: any[]) => {
 .total-value {
   font-size: 28px;
   font-weight: 700;
+}
+
+.budget-limit {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding: 0 4px;
+  font-size: 14px;
+  color: #595959;
+}
+
+.limit-label {
+  font-weight: 500;
+}
+
+.budget-alert {
+  margin-top: 12px;
 }
 
 /* 地图卡片 */
