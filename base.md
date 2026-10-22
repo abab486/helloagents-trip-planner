@@ -182,3 +182,65 @@ save：225
 请用计算器算一下：前四项加起来等于 total
 ────────────────────────────
 行程是否包含：金山寺 [是]；西津渡 [是]；镇江博物馆 [是]  
+
+---------------------------------------------------------------------------------------------------------------------------
+1. `plan_trip` 改为 `async def`，三个子 Agent 并行**
+
+```python
+results = await asyncio.gather(
+    self._run_agent_async("景点", self.attraction_agent, ...),
+    self._run_agent_async("天气", self.weather_agent, ...),
+    self._run_agent_async("酒店", self.hotel_agent, ...),
+    return_exceptions=True,
+)
+```
+
+**2. 同步 Agent 放进线程池，并加超时**
+
+```python
+async def _run_agent_async(self, label, agent, query):
+    started = time.perf_counter()
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(agent.run, query),
+            timeout=AGENT_TIMEOUT_SECONDS,   # 90s
+        )
+        print(f"   [{label}] 完成，耗时 {time.perf_counter() - started:.1f}s")
+        return result
+    except asyncio.TimeoutError:
+        print(f"   [{label}] 超时（>{AGENT_TIMEOUT_SECONDS}s）")
+        raise
+```
+
+**3. 失败隔离**
+
+`return_exceptions=True` + `_normalize_agent_result`：某个 Agent 超时或异常时降级为空字符串，ContextBuilder 会把对应段落写成「未获取到数据」，整体请求仍能返回计划。
+
+**4. Planner 也放进线程池，路由改为 `await`**
+
+```python
+planner_response = await asyncio.to_thread(self.planner_agent.run, planner_query)
+...
+trip_plan = await agent.plan_trip(request)
+```
+
+同时把 `get_trip_planner_agent()` 也改成 `await asyncio.to_thread(...)`，避免首次请求初始化 MCP 时再次阻塞事件循环。
+
+端到端耗时：29.6s 秒（看终端日志或者浏览器 Network 里的等待时间）
+LLM 总 Token：__21749token__（这次请求大概消耗了多少 Token）
+花费 0.02
+工具调用序列（看后端终端）：
+  1. 搜景点调用的工具名：amap_maps_text_search
+  2. 查天气调用的工具名：amap_maps_weather
+  3. 搜酒店调用的工具名：amap_maps_text_search
+────────────────────────────
+采用BudgetCalculator
+total_attractions: 165
+total_hotels: 600
+total_meals: 450
+total_transportation: 60
+total: 1275
+save：225
+请用计算器算一下：前四项加起来等于 total
+────────────────────────────
+行程是否包含：金山寺 [是]；西津渡 [是]；镇江博物馆 [是]
