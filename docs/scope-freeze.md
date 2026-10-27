@@ -140,16 +140,16 @@
 
 ## 7. Day 1 验收清单
 
-- [ ] 18 个景点 CSV，含 8 个 must-see
-- [ ] 10 家酒店、12 家餐厅、8 条交通、12 张知识卡
-- [ ] 每条数据有 `source_url` + `last_verified`
-- [ ] `schema_zhenjiang.sql` 写好核心表
-- [ ] `TripContext` / `NodeResult` / `PlanDraft` 可导入
-- [ ] Walking skeleton 用 CSV + 假 Planner 跑通 2 天行程
-- [ ] 预算恒等式测试通过
-- [ ] `docs/adr/001-deterministic-dag.md` 完成草稿
-- [ ] 旧代码未被修改
-- [ ] 提交到 `feature/zhenjiang-agent`
+- [x] 18 个景点 CSV，含 8 个 must-see
+- [x] 10 家酒店、12 家餐厅、8 条交通、12 张知识卡
+- [x] 每条数据有 `source_url` + `last_verified`
+- [x] `schema_zhenjiang.sql` 写好核心表
+- [x] `TripContext` / `NodeResult` / `PlanDraft` 可导入
+- [x] Walking skeleton 用 CSV + 假 Planner 跑通 2 天行程
+- [x] 预算恒等式测试通过
+- [x] `docs/adr/001-deterministic-dag.md` 完成草稿
+- [x] 旧代码未被修改
+- [x] 提交到 `feature/zhenjiang-agent`
 
 ---
 

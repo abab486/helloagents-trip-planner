@@ -8,7 +8,11 @@
 - 数据校验器：`app/data/validate_zhenjiang.py`
 - 数据说明：`app/data/zhenjiang/README.md`
 - 新表 DDL：`app/db/schema_zhenjiang.sql`（`zj_` 前缀，避免旧表冲突）
-- 测试：`tests/test_zhenjiang_dataset.py`
+- 领域契约：`app/domain/models.py`
+- DAG 上下文：`app/dag/context.py`
+- CSV loader：`app/data/loader.py`
+- Walking skeleton：`app/dag/walking_skeleton.py`
+- 测试：`tests/test_zhenjiang_dataset.py`、`tests/test_domain_models.py`、`tests/test_walking_skeleton.py`
 
 ## 验证结果
 
@@ -27,7 +31,16 @@ tables: zj_attraction, zj_attraction_alias, zj_dataset_meta,
         zj_transport, zj_transport_price
 ```
 
-完整测试：31 passed。
+Walking skeleton（2026-11-01，2 天，预算 800）：
+
+```text
+Day 1: A001 金山寺 -> A002 西津渡；午餐 R002；晚餐 R008
+Day 2: A005 北固山 -> A006 焦山；午餐 R006；晚餐 R001
+预算：690 元，未超预算；validation passed
+Trace：load_dataset -> fake_plan -> validate -> budget -> render
+```
+
+完整测试：50 passed。
 
 ## 数据边界
 
