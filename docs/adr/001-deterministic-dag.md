@@ -128,6 +128,7 @@ Trace 返回给前端，渲染成时间线；同时供评测与面试演示使�
 ### 2.7 数据与基础设施
 
 - MySQL：景点/酒店/餐厅/交通/知识卡主数据，`source_url + last_verified`。
+- 新表统一 `zj_` 前缀（`zj_attraction`、`zj_hotel` 等），避免与旧链路的价格表冲突；旧表保留可回滚。
 - Redis：节点缓存、最终计划缓存、幂等键、限流、Trace（可选 TTL）。
 - FastAPI：`/api/v1/trips`、`/api/v1/trips/{id}/recalculate`、`/api/v1/graph`、`/health`。
 - 前端：镇江首页、结果页、Trace 时间线、预算来源 badge、地图。
