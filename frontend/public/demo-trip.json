@@ -1,0 +1,159 @@
+{
+  "success": true,
+  "message": "示例行程（无需 API Key）",
+  "trip_id": "trip_demo_001",
+  "request_id": "demo-0001",
+  "cached": true,
+  "data": {
+    "request": {
+      "city": "镇江",
+      "start_date": "2026-11-14",
+      "end_date": "2026-11-15",
+      "travel_days": 2,
+      "transportation": "公共交通",
+      "accommodation": "经济型酒店",
+      "preferences": ["历史文化"],
+      "free_text_input": "想走三山一渡，节奏适中",
+      "budget_limit": 800,
+      "party": "solo",
+      "pace": "normal",
+      "must_see_ids": []
+    },
+    "days": [
+      {
+        "date": "2026-11-14",
+        "day_index": 0,
+        "theme": "历史文化",
+        "transport_mode": "公共交通",
+        "attractions": [
+          {
+            "id": "A001",
+            "name": "金山寺",
+            "area": "润州区",
+            "ticket_price": 65,
+            "duration_min": 150,
+            "description": "白蛇传水漫金山传说地，金山公园内的核心古刹",
+            "must_see": true,
+            "indoor": false,
+            "walking_level": 2,
+            "lat": 32.224,
+            "lng": 119.417
+          },
+          {
+            "id": "A002",
+            "name": "西津渡古街",
+            "area": "润州区",
+            "ticket_price": 0,
+            "duration_min": 150,
+            "description": "镇江保存最完整的古渡口街区，适合傍晚亮灯后散步",
+            "must_see": true,
+            "indoor": false,
+            "walking_level": 1,
+            "lat": 32.216,
+            "lng": 119.438
+          }
+        ],
+        "hotel": {
+          "id": "H002",
+          "name": "格林豪泰(镇江大市口店)",
+          "tier": "经济型",
+          "area": "京口区",
+          "price_per_night": 200,
+          "lat": 32.205,
+          "lng": 119.45
+        },
+        "meals": [
+          {"type": "breakfast", "restaurant_id": "R004", "name": "大华面馆(大市口店)", "avg_price": 20, "area": "京口区"},
+          {"type": "lunch", "restaurant_id": "R002", "name": "邵顺兴锅盖面(金山宝地店)", "avg_price": 25, "area": "润州区"},
+          {"type": "dinner", "restaurant_id": "R008", "name": "西津渡茶楼(示例)", "avg_price": 60, "area": "润州区"}
+        ]
+      },
+      {
+        "date": "2026-11-15",
+        "day_index": 1,
+        "theme": "历史文化",
+        "transport_mode": "公共交通",
+        "attractions": [
+          {
+            "id": "A005",
+            "name": "北固山",
+            "area": "京口区",
+            "ticket_price": 40,
+            "duration_min": 120,
+            "description": "辛弃疾《永遇乐·京口北固亭怀古》所在地",
+            "must_see": true,
+            "indoor": false,
+            "walking_level": 2,
+            "lat": 32.228,
+            "lng": 119.455
+          },
+          {
+            "id": "A006",
+            "name": "焦山",
+            "area": "京口区",
+            "ticket_price": 50,
+            "duration_min": 150,
+            "description": "长江中的岛屿景区，以焦山碑林和定慧寺闻名",
+            "must_see": true,
+            "indoor": false,
+            "walking_level": 2,
+            "lat": 32.242,
+            "lng": 119.478
+          }
+        ],
+        "hotel": {
+          "id": "H002",
+          "name": "格林豪泰(镇江大市口店)",
+          "tier": "经济型",
+          "area": "京口区",
+          "price_per_night": 200,
+          "lat": 32.205,
+          "lng": 119.45
+        },
+        "meals": [
+          {"type": "breakfast", "restaurant_id": "R004", "name": "大华面馆(大市口店)", "avg_price": 20, "area": "京口区"},
+          {"type": "lunch", "restaurant_id": "R006", "name": "镇江菜馆(示例)", "avg_price": 70, "area": "京口区"},
+          {"type": "dinner", "restaurant_id": "R001", "name": "宴春酒楼(大市口店)", "avg_price": 80, "area": "京口区"}
+        ]
+      }
+    ],
+    "budget": {
+      "lines": [
+        {"category": "attraction", "ref_id": "A001", "name": "金山寺", "amount": 65, "source": "csv", "detail": "参考价，出行前核实 / 2026-11-14"},
+        {"category": "attraction", "ref_id": "A002", "name": "西津渡古街", "amount": 0, "source": "csv", "detail": "免费 / 2026-11-14"},
+        {"category": "attraction", "ref_id": "A005", "name": "北固山", "amount": 40, "source": "csv", "detail": "参考价，出行前核实 / 2026-11-15"},
+        {"category": "attraction", "ref_id": "A006", "name": "焦山", "amount": 50, "source": "csv", "detail": "参考价，出行前核实 / 2026-11-15"},
+        {"category": "hotel", "ref_id": "H002", "name": "格林豪泰(镇江大市口店)", "amount": 200, "source": "csv", "detail": "第 1 晚 / 经济型"},
+        {"category": "meal", "ref_id": "R004", "name": "早餐·大华面馆(大市口店)", "amount": 20, "source": "csv", "detail": "2026-11-14"},
+        {"category": "meal", "ref_id": "R002", "name": "午餐·邵顺兴锅盖面(金山宝地店)", "amount": 25, "source": "csv", "detail": "2026-11-14"},
+        {"category": "meal", "ref_id": "R008", "name": "晚餐·西津渡茶楼(示例)", "amount": 60, "source": "csv", "detail": "2026-11-14"},
+        {"category": "meal", "ref_id": "R004", "name": "早餐·大华面馆(大市口店)", "amount": 20, "source": "csv", "detail": "2026-11-15"},
+        {"category": "meal", "ref_id": "R006", "name": "午餐·镇江菜馆(示例)", "amount": 70, "source": "csv", "detail": "2026-11-15"},
+        {"category": "meal", "ref_id": "R001", "name": "晚餐·宴春酒楼(大市口店)", "amount": 80, "source": "csv", "detail": "2026-11-15"},
+        {"category": "transport", "ref_id": "公共交通", "name": "公共交通日预算", "amount": 30, "source": "default", "detail": "2026-11-14"},
+        {"category": "transport", "ref_id": "公共交通", "name": "公共交通日预算", "amount": 30, "source": "default", "detail": "2026-11-15"}
+      ],
+      "total": 690,
+      "budget_limit": 800,
+      "over_budget": 0
+    },
+    "validation": {
+      "issues": [],
+      "repaired": false,
+      "passed": true
+    },
+    "weather": [
+      {"date": "2026-11-14", "day_weather": "晴", "night_weather": "多云", "day_temp": 19, "night_temp": 10, "precipitation_prob": 10, "source": "示例预报"},
+      {"date": "2026-11-15", "day_weather": "多云", "night_weather": "阴", "day_temp": 17, "night_temp": 9, "precipitation_prob": 20, "source": "示例预报"}
+    ],
+    "trace": [
+      {"node_id": "load_dataset", "status": "ok", "duration_ms": 4.2, "cache": "hit", "tokens_in": 0, "tokens_out": 0, "cost": 0, "error": null, "meta": {"data_version": "2026-10-27"}},
+      {"node_id": "plan", "status": "ok", "duration_ms": 7200.0, "cache": null, "tokens_in": 4800, "tokens_out": 1800, "cost": 0, "error": null, "meta": {"planner_attempts": 1, "total_tokens": 6600, "model": "deepseek-flash", "prompt_version": "planner_v1"}},
+      {"node_id": "validate", "status": "ok", "duration_ms": 1.1, "cache": null, "tokens_in": 0, "tokens_out": 0, "cost": 0, "error": null, "meta": {"blocking": false}},
+      {"node_id": "budget", "status": "ok", "duration_ms": 1.4, "cache": null, "tokens_in": 0, "tokens_out": 0, "cost": 0, "error": null, "meta": {"over_budget": 0}},
+      {"node_id": "render", "status": "ok", "duration_ms": 0.8, "cache": null, "tokens_in": 0, "tokens_out": 0, "cost": 0, "error": null, "meta": {}}
+    ],
+    "degraded": false,
+    "notes": ["示例行程：确定性 DAG + LLM Planner 的离线快照。"]
+  }
+}

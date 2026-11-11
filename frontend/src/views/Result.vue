@@ -4,6 +4,7 @@
       <a-button class="back-button" size="large" @click="goBack">← 返回首页</a-button>
       <a-space size="middle" wrap>
         <a-tag v-if="meta?.cached" color="blue">缓存命中</a-tag>
+        <a-tag v-if="isDemo" color="purple">示例行程</a-tag>
         <a-tag v-if="tripData?.degraded" color="orange">降级结果</a-tag>
 
         <template v-if="!editMode">
@@ -241,7 +242,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { DownOutlined } from '@ant-design/icons-vue'
 import AMapLoader from '@amap/amap-jsapi-loader'
@@ -265,8 +266,10 @@ interface TripMeta {
 }
 
 const router = useRouter()
+const route = useRoute()
 const tripData = ref<TripResult | null>(null)
 const meta = ref<TripMeta | null>(null)
+const isDemo = ref(false)
 const editMode = ref(false)
 const recalculating = ref(false)
 const originalPlan = ref<TripResult | null>(null)
@@ -293,25 +296,36 @@ function issueText(issues: ValidationIssue[]): string {
 }
 
 onMounted(async () => {
+  let response: TripPlanResponse | null = null
   const raw = sessionStorage.getItem('tripResponse')
-  if (!raw) return
+
   try {
-    const response = JSON.parse(raw) as TripPlanResponse
-    if (!response.data) return
-    tripData.value = response.data
-    meta.value = {
-      trip_id: response.trip_id,
-      request_id: response.request_id,
-      cached: response.cached,
-      message: response.message
+    if (raw) {
+      response = JSON.parse(raw) as TripPlanResponse
+    } else if (route.query.demo === '1') {
+      const demoResponse = await fetch(`${import.meta.env.BASE_URL}demo-trip.json`)
+      if (demoResponse.ok) {
+        response = (await demoResponse.json()) as TripPlanResponse
+        isDemo.value = true
+      }
     }
-    await loadPhotos()
-    await nextTick()
-    await initMap()
   } catch (error) {
     console.error('读取行程缓存失败', error)
     message.error('读取行程缓存失败，请回首页重新生成')
+    return
   }
+
+  if (!response?.data) return
+  tripData.value = response.data
+  meta.value = {
+    trip_id: response.trip_id,
+    request_id: response.request_id,
+    cached: response.cached,
+    message: response.message
+  }
+  await loadPhotos()
+  await nextTick()
+  await initMap()
 })
 
 onBeforeUnmount(() => {

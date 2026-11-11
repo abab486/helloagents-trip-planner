@@ -188,6 +188,12 @@
           </a-button>
         </a-form-item>
 
+        <div class="demo-link">
+          <a-button type="link" @click="router.push('/result?demo=1')">
+            没有 API Key？先看一份示例行程 →
+          </a-button>
+        </div>
+
         <a-form-item v-if="loading">
           <div class="loading-container">
             <a-spin size="large" />
@@ -538,6 +544,11 @@ onBeforeUnmount(stopLoadingClock)
 
 .button-icon {
   margin-right: 8px;
+}
+
+.demo-link {
+  margin-top: -8px;
+  text-align: center;
 }
 
 .loading-container {

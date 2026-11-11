@@ -21,9 +21,9 @@
 ### 结果页
 
 - 改为消费 API v1 的 `TripResult`
-- 新增 [TraceTimeline.vue](frontend/src/components/TraceTimeline.vue)
+- 新增 [TraceTimeline.vue](../frontend/src/components/TraceTimeline.vue)
   - 节点耗时、状态、缓存、Token、Planner 重试次数、错误
-- 新增 [BudgetPanel.vue](frontend/src/components/BudgetPanel.vue)
+- 新增 [BudgetPanel.vue](../frontend/src/components/BudgetPanel.vue)
   - 四项分类汇总
   - 每条费用的来源 badge（价格库/默认价/模型估值）
   - 超预算/结余提示
