@@ -477,7 +477,7 @@ def render_trip(context: TripContext) -> TripResult:
 # ---------------------------------------------------------------------------
 # Day 2: the same five steps, now as DAG nodes
 # ---------------------------------------------------------------------------
-def _node_load(context: TripContext) -> NodeResult:
+def load_dataset_node(context: TripContext) -> NodeResult:
     facts = load_facts(
         context.request.start_date,
         context.request.travel_days,
@@ -487,7 +487,7 @@ def _node_load(context: TripContext) -> NodeResult:
     return NodeResult.ok(facts.summary(), data_version=facts.data_version)
 
 
-def _node_plan(context: TripContext) -> NodeResult:
+def fake_plan_node(context: TripContext) -> NodeResult:
     if context.facts is None:
         raise RuntimeError("fake_plan 需要 facts")
     plan = fake_plan(context.request, context.facts)
@@ -495,7 +495,7 @@ def _node_plan(context: TripContext) -> NodeResult:
     return NodeResult.ok({"days": len(plan.days)})
 
 
-def _node_validate(context: TripContext) -> NodeResult:
+def validate_node(context: TripContext) -> NodeResult:
     if context.facts is None or context.plan is None:
         raise RuntimeError("validate 需要 facts / plan")
     validation = validate_plan(context.plan, context.facts, context.request)
@@ -513,7 +513,7 @@ def _node_validate(context: TripContext) -> NodeResult:
     )
 
 
-def _node_budget(context: TripContext) -> NodeResult:
+def budget_node(context: TripContext) -> NodeResult:
     if context.facts is None or context.plan is None:
         raise RuntimeError("budget 需要 facts / plan")
     budget = budget_plan(context.plan, context.facts, context.request)
@@ -521,7 +521,7 @@ def _node_budget(context: TripContext) -> NodeResult:
     return NodeResult.ok(budget.summary(), over_budget=budget.over_budget)
 
 
-def _node_render(context: TripContext) -> NodeResult:
+def render_node(context: TripContext) -> NodeResult:
     return NodeResult.ok(render_trip(context))
 
 
@@ -531,11 +531,11 @@ def build_skeleton_graph() -> Graph:
     Every node is required; Day 3+ will add optional tool nodes/conditions.
     """
     graph = Graph()
-    graph.add("load_dataset", _node_load)
-    graph.add("fake_plan", _node_plan, depends_on=("load_dataset",))
-    graph.add("validate", _node_validate, depends_on=("fake_plan",))
-    graph.add("budget", _node_budget, depends_on=("validate",))
-    graph.add("render", _node_render, depends_on=("budget",))
+    graph.add("load_dataset", load_dataset_node)
+    graph.add("fake_plan", fake_plan_node, depends_on=("load_dataset",))
+    graph.add("validate", validate_node, depends_on=("fake_plan",))
+    graph.add("budget", budget_node, depends_on=("validate",))
+    graph.add("render", render_node, depends_on=("budget",))
     return graph
 
 
@@ -564,7 +564,7 @@ def run_walking_skeleton(request: TripRequest) -> TripResult:
     return result
 
 
-def _build_request(args: argparse.Namespace) -> TripRequest:
+def build_request_from_args(args: argparse.Namespace) -> TripRequest:
     start = date.fromisoformat(args.start_date)
     end = start + timedelta(days=args.days - 1)
     return TripRequest(
@@ -583,7 +583,7 @@ def _build_request(args: argparse.Namespace) -> TripRequest:
     )
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def build_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Day 1 walking skeleton: deterministic fake planner, no LLM."
     )
@@ -631,10 +631,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = _build_parser()
+    parser = build_cli_parser()
     args = parser.parse_args(argv)
     try:
-        request = _build_request(args)
+        request = build_request_from_args(args)
         result = run_walking_skeleton(request)
     except Exception as exc:  # noqa: BLE001 - CLI should print a useful error
         print(f"[FAIL] {exc}")

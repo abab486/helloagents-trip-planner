@@ -142,6 +142,8 @@ class AttractionCandidate(BaseModel):
             "indoor": self.indoor,
             "walking_level": self.walking_level,
             "open_hours": self.open_hours,
+            "closed_days": self.closed_days,
+            "season": self.season,
         }
 
 
