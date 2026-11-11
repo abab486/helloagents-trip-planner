@@ -182,6 +182,8 @@ docker compose up --build
 
 Compose 包含 `api` / `web` / `mysql` / `redis`；不配置 Redis 时本地开发会自动回退内存缓存。
 
+> 公网部署（Cloudflare Tunnel / Caddy / HTTPS / WSL Redis / 限流与成本）见 [docs/deployment.md](docs/deployment.md)。
+
 ### 方式 B：本地开发
 
 后端：
@@ -300,6 +302,7 @@ docs/
   architecture.md              # 架构 / DAG / LLM 边界
   adr/001-deterministic-dag.md # 决策记录
   scope-freeze.md              # 范围冻结
+  deployment.md                # 上线部署清单（Cloudflare Tunnel / Caddy / WSL Redis）
   demo-script.md               # 3 分钟讲稿
   benchmarks.md                # 历史基准
 frontend/

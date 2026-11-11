@@ -49,7 +49,14 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      # Bind to localhost; put Caddy/Cloudflare Tunnel in front for public access.
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     restart: unless-stopped
 
   web:
@@ -60,7 +67,7 @@ services:
     depends_on:
       - api
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     restart: unless-stopped
 
 volumes:
