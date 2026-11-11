@@ -1,8 +1,10 @@
-"""Day 1 walking skeleton: CSV facts -> deterministic fake planner -> validation
--> budget -> rendered result, with no LLM, MySQL or Redis.
+"""Day 1 walking skeleton, now executed as a Day 2 DAG.
 
-The real DAG executor (Day 2) will reuse the same contracts and functions as
-nodes. Keeping this script runnable gives us a regression baseline:
+Pipeline:
+    load_dataset -> fake_plan -> validate -> budget -> render
+
+Still no LLM, MySQL or Redis. Keeping this script runnable gives us a
+regression baseline before Day 3 swaps fake_plan for a real LLM planner:
 
     python -m app.dag.walking_skeleton --days 2 --budget 800
 """
@@ -10,8 +12,8 @@ nodes. Keeping this script runnable gives us a regression baseline:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
-import time
 from datetime import date, timedelta
 
 from ..data.loader import load_facts
@@ -38,6 +40,8 @@ from .context import (
     TripContext,
     TripResult,
 )
+from .executor import DAGExecutor
+from .graph import Graph
 
 MEAL_TYPES = ("breakfast", "lunch", "dinner")
 MEAL_LABELS = {"breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐"}
@@ -51,10 +55,6 @@ TRANSPORT_DAILY = {"公共交通": 30, "步行": 0, "打车": 80, "自驾": 100,
 DEFAULT_HOTEL_PRICE = 200
 DEFAULT_MEAL_PRICE = {"breakfast": 30, "lunch": 50, "dinner": 70}
 MAX_DAILY_MINUTES = 540
-
-
-def _elapsed_ms(started: float) -> float:
-    return (time.perf_counter() - started) * 1000
 
 
 def _date_list(start_date: str, days: int) -> list[date]:
@@ -474,75 +474,92 @@ def render_trip(context: TripContext) -> TripResult:
     )
 
 
-def run_walking_skeleton(request: TripRequest) -> TripResult:
-    context = TripContext(request=request)
-
-    started = time.perf_counter()
-    try:
-        facts = load_facts(request.start_date, request.travel_days)
-    except Exception as exc:  # noqa: BLE001 - surface as a failed node
-        context.record(
-            "load_dataset",
-            NodeResult.failed(str(exc)),
-            _elapsed_ms(started),
-        )
-        raise
+# ---------------------------------------------------------------------------
+# Day 2: the same five steps, now as DAG nodes
+# ---------------------------------------------------------------------------
+def _node_load(context: TripContext) -> NodeResult:
+    facts = load_facts(
+        context.request.start_date,
+        context.request.travel_days,
+    )
     context.facts = facts
     context.candidates = list(facts.attractions)
-    context.record(
-        "load_dataset",
-        NodeResult.ok(facts.summary()),
-        _elapsed_ms(started),
-        data_version=facts.data_version,
-    )
+    return NodeResult.ok(facts.summary(), data_version=facts.data_version)
 
-    started = time.perf_counter()
-    try:
-        plan = fake_plan(request, facts)
-    except Exception as exc:  # noqa: BLE001
-        context.record("fake_plan", NodeResult.failed(str(exc)), _elapsed_ms(started))
-        raise
+
+def _node_plan(context: TripContext) -> NodeResult:
+    if context.facts is None:
+        raise RuntimeError("fake_plan 需要 facts")
+    plan = fake_plan(context.request, context.facts)
     context.plan = plan
-    context.record(
-        "fake_plan",
-        NodeResult.ok({"days": len(plan.days)}),
-        _elapsed_ms(started),
-    )
+    return NodeResult.ok({"days": len(plan.days)})
 
-    started = time.perf_counter()
-    validation = validate_plan(plan, facts, request)
+
+def _node_validate(context: TripContext) -> NodeResult:
+    if context.facts is None or context.plan is None:
+        raise RuntimeError("validate 需要 facts / plan")
+    validation = validate_plan(context.plan, context.facts, context.request)
     context.validation = validation
-    context.record(
-        "validate",
-        NodeResult(
-            status=NodeStatus.ok if validation.passed else NodeStatus.failed,
-            data={"issues": len(validation.issues)},
-            error=None if validation.passed else "plan validation failed",
-        ),
-        _elapsed_ms(started),
-        blocking=validation.has_blocking,
-    )
     if not validation.passed:
-        raise ValueError("计划校验失败: " + "; ".join(issue.message for issue in validation.issues))
+        return NodeResult.failed(
+            "计划校验失败: "
+            + "; ".join(issue.message for issue in validation.issues),
+            blocking=True,
+            issues=len(validation.issues),
+        )
+    return NodeResult.ok(
+        {"issues": len(validation.issues)},
+        blocking=False,
+    )
 
-    started = time.perf_counter()
-    budget = budget_plan(plan, facts, request)
+
+def _node_budget(context: TripContext) -> NodeResult:
+    if context.facts is None or context.plan is None:
+        raise RuntimeError("budget 需要 facts / plan")
+    budget = budget_plan(context.plan, context.facts, context.request)
     context.budget = budget
-    context.record(
-        "budget",
-        NodeResult.ok(budget.summary()),
-        _elapsed_ms(started),
-        over_budget=budget.over_budget,
-    )
+    return NodeResult.ok(budget.summary(), over_budget=budget.over_budget)
 
-    started = time.perf_counter()
-    result = render_trip(context)
-    context.record(
-        "render",
-        NodeResult.ok({"days": len(result.days)}),
-        _elapsed_ms(started),
-    )
-    result.trace = list(context.trace)
+
+def _node_render(context: TripContext) -> NodeResult:
+    return NodeResult.ok(render_trip(context))
+
+
+def build_skeleton_graph() -> Graph:
+    """The Day 1 pipeline expressed as a DAG.
+
+    Every node is required; Day 3+ will add optional tool nodes/conditions.
+    """
+    graph = Graph()
+    graph.add("load_dataset", _node_load)
+    graph.add("fake_plan", _node_plan, depends_on=("load_dataset",))
+    graph.add("validate", _node_validate, depends_on=("fake_plan",))
+    graph.add("budget", _node_budget, depends_on=("validate",))
+    graph.add("render", _node_render, depends_on=("budget",))
+    return graph
+
+
+def run_walking_skeleton(request: TripRequest) -> TripResult:
+    context = TripContext(request=request)
+    execution = asyncio.run(DAGExecutor().run(build_skeleton_graph(), context))
+
+    if not execution.success:
+        errors = [
+            event.error
+            for event in execution.trace
+            if event.status == NodeStatus.failed and event.error
+        ]
+        raise ValueError(
+            "DAG 执行失败: " + ("; ".join(errors) if errors else str(execution.failed))
+        )
+
+    result = execution.outputs.get("render")
+    if not isinstance(result, TripResult):
+        raise RuntimeError("render 节点没有返回 TripResult")
+
+    # The render node runs before the executor records its own trace event;
+    # attach the complete trace after execution.
+    result.trace = list(execution.trace)
     result.degraded = context.degraded
     return result
 

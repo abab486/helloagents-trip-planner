@@ -1,6 +1,6 @@
 # ADR-001：使用代码定义的确定性 DAG 编排多角色 LLM
 
-- **状态**：Proposed（草稿，Day 2 DAG 测试通过后改为 Accepted）
+- **状态**：Accepted（Day 2 DAG 测试通过：拓扑、并行、超时、重试、失败隔离、循环检测）
 - **日期**：2026-10-27
 - **决策者**：项目作者
 - **关联**：[范围冻结](../scope-freeze.md)、[TROUBLESHOOTING 001–004](../../TROUBLESHOOTING.md)
@@ -275,3 +275,4 @@ flowchart LR
 | 日期 | 变更 | 作者 |
 |---|---|---|
 | 2026-10-27 | 初稿：冻结范围、确定 DAG/LLM 边界、记录备选方案与风险 | 项目作者 |
+| 2026-11-11 | Day 2 DAG 执行器与测试通过，状态改为 Accepted | 项目作者 |
