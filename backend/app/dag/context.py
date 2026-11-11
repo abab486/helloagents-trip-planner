@@ -139,6 +139,8 @@ class AttractionView(BaseModel):
     must_see: bool = False
     indoor: bool = False
     walking_level: int = 2
+    lat: float = 0.0
+    lng: float = 0.0
 
 
 class HotelView(BaseModel):
@@ -147,6 +149,8 @@ class HotelView(BaseModel):
     tier: str
     area: str
     price_per_night: int
+    lat: float = 0.0
+    lng: float = 0.0
 
 
 class MealView(BaseModel):
@@ -155,6 +159,16 @@ class MealView(BaseModel):
     name: str
     avg_price: int
     area: str
+
+
+class WeatherView(BaseModel):
+    date: str
+    day_weather: str = ""
+    night_weather: str = ""
+    day_temp: int = 0
+    night_temp: int = 0
+    precipitation_prob: int = 0
+    source: str = ""
 
 
 class DayView(BaseModel):
@@ -172,6 +186,7 @@ class TripResult(BaseModel):
     days: list[DayView]
     budget: BudgetReport
     validation: ValidationResult
+    weather: list[WeatherView] = Field(default_factory=list)
     trace: list[TraceEvent] = Field(default_factory=list)
     degraded: bool = False
     notes: list[str] = Field(default_factory=list)

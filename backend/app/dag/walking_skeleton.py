@@ -39,6 +39,7 @@ from .context import (
     NodeStatus,
     TripContext,
     TripResult,
+    WeatherView,
 )
 from .executor import DAGExecutor
 from .graph import Graph
@@ -420,6 +421,8 @@ def render_trip(context: TripContext) -> TripResult:
                     must_see=attraction.must_see,
                     indoor=attraction.indoor,
                     walking_level=attraction.walking_level,
+                    lat=attraction.lat,
+                    lng=attraction.lng,
                 )
             )
 
@@ -431,6 +434,8 @@ def render_trip(context: TripContext) -> TripResult:
                 tier=hotel.tier,
                 area=hotel.area,
                 price_per_night=hotel.price_per_night,
+                lat=hotel.lat,
+                lng=hotel.lng,
             )
             if hotel
             else None
@@ -468,6 +473,18 @@ def render_trip(context: TripContext) -> TripResult:
         days=days,
         budget=context.budget,
         validation=context.validation,
+        weather=[
+            WeatherView(
+                date=item.date,
+                day_weather=item.day_weather,
+                night_weather=item.night_weather,
+                day_temp=item.day_temp,
+                night_temp=item.night_temp,
+                precipitation_prob=item.precipitation_prob,
+                source=item.source,
+            )
+            for item in facts.weather
+        ],
         trace=list(context.trace),
         degraded=context.degraded,
         notes=list(context.plan.notes),

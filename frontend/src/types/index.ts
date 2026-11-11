@@ -1,82 +1,8 @@
-// 类型定义
+// API v1 types. Keep the frontend aligned with backend TripResult.
 
-export interface Location {
-  longitude: number
-  latitude: number
-}
-
-export interface Attraction {
-  name: string
-  address: string
-  location: Location
-  visit_duration: number
-  description: string
-  category?: string
-  rating?: number
-  image_url?: string
-  ticket_price?: number
-}
-
-export interface Meal {
-  type: 'breakfast' | 'lunch' | 'dinner' | 'snack'
-  name: string
-  address?: string
-  location?: Location
-  description?: string
-  estimated_cost?: number
-}
-
-export interface Hotel {
-  name: string
-  address: string
-  location?: Location
-  price_range: string
-  rating: string
-  distance: string
-  type: string
-  estimated_cost?: number
-}
-
-export interface Budget {
-  total_attractions: number
-  total_hotels: number
-  total_meals: number
-  total_transportation: number
-  total: number
-}
-
-export interface DayPlan {
-  date: string
-  day_index: number
-  description: string
-  transportation: string
-  accommodation: string
-  hotel?: Hotel
-  attractions: Attraction[]
-  meals: Meal[]
-}
-
-export interface WeatherInfo {
-  date: string
-  day_weather: string
-  night_weather: string
-  day_temp: number
-  night_temp: number
-  wind_direction: string
-  wind_power: string
-}
-
-export interface TripPlan {
-  city: string
-  start_date: string
-  end_date: string
-  days: DayPlan[]
-  weather_info: WeatherInfo[]
-  overall_suggestions: string
-  budget?: Budget
-  budget_limit?: number
-  over_budget?: number
-}
+export type Party = 'solo' | 'couple' | 'family' | 'elderly'
+export type Pace = 'relaxed' | 'normal' | 'packed'
+export type MealType = 'breakfast' | 'lunch' | 'dinner'
 
 export interface TripFormData {
   city: string
@@ -88,11 +14,135 @@ export interface TripFormData {
   preferences: string[]
   free_text_input: string
   budget_limit?: number | null
+  party: Party
+  pace: Pace
+  must_see_ids?: string[]
+}
+
+export interface AttractionView {
+  id: string
+  name: string
+  area: string
+  ticket_price: number
+  duration_min: number
+  description: string
+  must_see: boolean
+  indoor: boolean
+  walking_level: number
+  lat: number
+  lng: number
+}
+
+export interface HotelView {
+  id: string
+  name: string
+  tier: string
+  area: string
+  price_per_night: number
+  lat: number
+  lng: number
+}
+
+export interface MealView {
+  type: MealType | string
+  restaurant_id: string
+  name: string
+  avg_price: number
+  area: string
+}
+
+export interface WeatherView {
+  date: string
+  day_weather: string
+  night_weather: string
+  day_temp: number
+  night_temp: number
+  precipitation_prob: number
+  source: string
+}
+
+export interface DayView {
+  date: string
+  day_index: number
+  theme: string
+  transport_mode: string
+  attractions: AttractionView[]
+  hotel?: HotelView | null
+  meals: MealView[]
+}
+
+export type BudgetCategory = 'attraction' | 'hotel' | 'meal' | 'transport'
+
+export interface BudgetLine {
+  category: BudgetCategory
+  ref_id: string
+  name: string
+  amount: number
+  source: string
+  detail: string
+}
+
+export interface BudgetReport {
+  lines: BudgetLine[]
+  total: number
+  budget_limit?: number | null
+  over_budget: number
+}
+
+export interface TraceEvent {
+  node_id: string
+  status: 'ok' | 'degraded' | 'failed' | 'skipped'
+  duration_ms: number
+  cache?: string | null
+  tokens_in: number
+  tokens_out: number
+  cost: number
+  error?: string | null
+  meta: Record<string, unknown>
+}
+
+export interface ValidationIssue {
+  code: string
+  severity: 'blocking' | 'warning' | 'info'
+  target: string
+  message: string
+  suggestion: string
+}
+
+export interface ValidationResult {
+  issues: ValidationIssue[]
+  repaired: boolean
+  passed: boolean
+}
+
+export interface TripResult {
+  request: TripFormData & { budget_limit?: number | null }
+  days: DayView[]
+  budget: BudgetReport
+  validation: ValidationResult
+  weather: WeatherView[]
+  trace: TraceEvent[]
+  degraded: boolean
+  notes: string[]
 }
 
 export interface TripPlanResponse {
   success: boolean
   message: string
-  data?: TripPlan
+  data: TripResult
+  trip_id: string
+  request_id: string
+  cached: boolean
 }
 
+export interface RecalculatePlan {
+  days: Array<{
+    date: string
+    attraction_ids: string[]
+    hotel_id: string
+    meals: Array<{ type: string; restaurant_id: string }>
+    transport_mode: string
+    theme: string
+  }>
+  notes: string[]
+}
