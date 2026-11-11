@@ -29,10 +29,12 @@ from .walking_skeleton import (
 )
 
 
-def make_llm_plan_node(planner: PlannerAgent):
+def make_llm_plan_node(planner: PlannerAgent | None):
     """Bind a PlannerAgent to a DAG node."""
 
     def plan_node(context: TripContext) -> NodeResult:
+        if planner is None:
+            raise RuntimeError("LLM planner 未配置")
         if context.facts is None:
             raise RuntimeError("LLM plan 节点需要 facts")
         result = planner.plan(context.request, context.facts)
@@ -50,7 +52,7 @@ def make_llm_plan_node(planner: PlannerAgent):
     return plan_node
 
 
-def build_llm_graph(planner: PlannerAgent) -> Graph:
+def build_llm_graph(planner: PlannerAgent | None) -> Graph:
     graph = Graph()
     graph.add("load_dataset", load_dataset_node)
     graph.add(
@@ -64,20 +66,16 @@ def build_llm_graph(planner: PlannerAgent) -> Graph:
     return graph
 
 
-def run_llm_pipeline(
+async def run_llm_pipeline_context_async(
     request: TripRequest,
     planner: PlannerAgent | None = None,
-) -> TripResult:
+) -> tuple[TripResult, TripContext]:
     planner = planner or PlannerAgent(create_llm_client())
     context = TripContext(request=request)
-    execution = asyncio.run(DAGExecutor().run(build_llm_graph(planner), context))
+    execution = await DAGExecutor().run(build_llm_graph(planner), context)
 
     if not execution.success:
-        errors = [
-            event.error
-            for event in execution.trace
-            if event.error
-        ]
+        errors = [event.error for event in execution.trace if event.error]
         raise RuntimeError(
             "LLM 规划失败: " + ("; ".join(errors) if errors else str(execution.failed))
         )
@@ -88,7 +86,23 @@ def run_llm_pipeline(
 
     result.trace = list(execution.trace)
     result.degraded = context.degraded
+    return result, context
+
+
+async def run_llm_pipeline_async(
+    request: TripRequest,
+    planner: PlannerAgent | None = None,
+) -> TripResult:
+    result, _ = await run_llm_pipeline_context_async(request, planner)
     return result
+
+
+def run_llm_pipeline(
+    request: TripRequest,
+    planner: PlannerAgent | None = None,
+) -> TripResult:
+    """Synchronous wrapper for CLI/smoke scripts; API uses the async version."""
+    return asyncio.run(run_llm_pipeline_async(request, planner))
 
 
 def main(argv: list[str] | None = None) -> int:

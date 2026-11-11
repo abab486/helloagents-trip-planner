@@ -36,5 +36,8 @@ huggingface_hub>=0.25.0
 PyMySQL>=1.1.0
 DBUtils>=3.0.0
 
+# Redis（可选：未配置时自动回退到内存缓存）
+redis>=5.0.0
+
 # 测试
 pytest>=8.0.0
