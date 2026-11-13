@@ -464,10 +464,6 @@ python -m app.eval.run --single-only --single-limit 5 --single-delay 2
 图是静态的 5 个节点；手写 DAG 可以讲清楚拓扑排序、并行、超时、重试、失败隔离，也方便移植到 Java。
 LangGraph 的 checkpoint/streaming 对这个项目不是刚需。
 
-### 为什么不用 Java 重写
-
-主语言是 Java，但 LLM 生态 Python 优先；8 天里重写会牺牲项目深度。
-架构是接口化的，DAG/Scheduler、Pydantic DTO、FastAPI、Redis、MySQL 都能映射到 Spring Boot。
 
 ### 为什么只做镇江
 
