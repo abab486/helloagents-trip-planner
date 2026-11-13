@@ -488,16 +488,6 @@ LangGraph 的 checkpoint/streaming 对这个项目不是刚需。
 
 ---
 
-## 面试时可以讲的三件事
-
-1. **确定性 DAG**：代码定义控制流，LLM 只做决策节点；节点级超时/重试/失败隔离/Trace。
-2. **预算确定性**：Planner 只输出 ID，金额由代码按价格库计算；预算恒等由模型约束保证。
-3. **评测驱动**：15 条 case + 三系统基线；LLM 的 must-see 覆盖 100% vs 规则保底 54.4%；26.7% 超预算是下一步依据。
-
-更完整的讲稿见 [docs/demo-script.md](docs/demo-script.md)。
-
----
-
 ## 数据与许可
 
 - 代码：[MIT](LICENSE)
