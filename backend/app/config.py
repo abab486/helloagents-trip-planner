@@ -85,7 +85,10 @@ def validate_config():
     warnings = []
 
     if not settings.amap_api_key:
-        errors.append("AMAP_API_KEY未配置")
+        # v1 镇江链路使用本地 CSV，不依赖高德；旧地图/MCP 路由才需要 Key。
+        warnings.append(
+            "AMAP_API_KEY未配置：旧地图/MCP 路由不可用，v1 镇江链路不受影响"
+        )
 
     # HelloAgentsLLM会自动从LLM_API_KEY读取,不强制要求OPENAI_API_KEY
     llm_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")

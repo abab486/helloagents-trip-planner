@@ -1,0 +1,13 @@
+id,name,meal_types,area,avg_price,tags,lat,lng,source_url,last_verified,note
+R001,宴春酒楼(大市口店),breakfast|lunch|dinner,京口区,80,镇江菜|肴肉|早茶,32.2050,119.4480,https://you.ctrip.com/,2026-10-27,参考价，需核实
+R002,邵顺兴锅盖面(金山宝地店),breakfast|lunch,润州区,25,锅盖面|面食,32.2220,119.4180,https://you.ctrip.com/,2026-10-27,参考价，需核实
+R003,李嫂锅盖面(西津渡店),breakfast|lunch,润州区,25,锅盖面|面食,32.2160,119.4380,https://you.ctrip.com/,2026-10-27,参考价，需核实
+R004,大华面馆(大市口店),breakfast|lunch,京口区,20,锅盖面|面食,32.2050,119.4490,https://you.ctrip.com/,2026-10-27,参考价，需核实
+R005,老宴春(西津渡店),lunch|dinner,润州区,90,镇江菜|肴肉,32.2160,119.4370,https://you.ctrip.com/,2026-10-27,参考价，需核实
+R006,镇江菜馆(示例),lunch|dinner,京口区,70,镇江菜|本地菜,32.2040,119.4500,https://you.ctrip.com/,2026-10-27,名称与价格为示例，待核实
+R007,江南饭店(示例),lunch|dinner,润州区,100,镇江菜|宴请,32.2130,119.4400,https://you.ctrip.com/,2026-10-27,名称与价格为示例，待核实
+R008,西津渡茶楼(示例),lunch|dinner,润州区,60,茶点|小吃,32.2160,119.4380,https://you.ctrip.com/,2026-10-27,名称与价格为示例，待核实
+R009,句容茅山农家菜(示例),lunch|dinner,句容市,70,农家菜|本地菜,31.7900,119.3000,https://you.ctrip.com/,2026-10-27,名称与价格为示例，待核实
+R010,扬中河豚馆(示例),lunch|dinner,扬中市,150,河豚|江鲜,32.2400,119.8200,https://you.ctrip.com/,2026-10-27,名称与价格为示例，河豚需按季节核实
+R011,丹阳眼镜城快餐(示例),breakfast|lunch,丹阳市,20,快餐|简餐,31.9900,119.5800,https://you.ctrip.com/,2026-10-27,名称与价格为示例，待核实
+R012,镇江锅盖面博物馆餐厅(示例),breakfast|lunch,润州区,30,锅盖面|小吃,32.1900,119.4600,https://you.ctrip.com/,2026-10-27,名称与价格为示例，待核实

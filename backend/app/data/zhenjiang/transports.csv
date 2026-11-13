@@ -1,0 +1,9 @@
+id,from_station,to_area,mode,duration_min,price,source_url,last_verified,note
+T001,镇江站,大市口,公共交通,20,2,https://www.amap.com/,2026-10-27,参考时间与票价
+T002,镇江站,西津渡,公共交通,25,2,https://www.amap.com/,2026-10-27,参考时间与票价
+T003,镇江站,金山公园,公共交通,20,2,https://www.amap.com/,2026-10-27,参考时间与票价
+T004,镇江南站,大市口,公共交通,35,2,https://www.amap.com/,2026-10-27,参考时间与票价
+T005,镇江南站,西津渡,公共交通,40,2,https://www.amap.com/,2026-10-27,参考时间与票价
+T006,镇江汽车客运站,西津渡,公共交通,15,1,https://www.amap.com/,2026-10-27,参考时间与票价
+T007,大市口,焦山,公共交通,30,2,https://www.amap.com/,2026-10-27,参考时间与票价
+T008,市区,茅山,自驾,60,0,https://www.amap.com/,2026-10-27,油费与过路费另计
