@@ -1,41 +1,60 @@
-# 镇江旅行助手
+# 镇江旅行助手 · 确定性 DAG 多角色 Agent
 
-> 一个只做镇江、把行程编排做成**确定性 DAG**、把 LLM 限制在少数决策节点、并且能解释每一笔预算的旅行规划助手。
+> 一个只做镇江的旅行规划服务：**LLM 只负责在候选 ID 中做取舍，代码负责事实、约束、预算和失败语义。**
 
 ![首页](docs/images/home.png)
 
 ![结果页](docs/images/result.png)
 
+当前 `main` 已合并：
+
+- `feature/zhenjiang-agent`：v1 主链路（DAG、Planner、Validator、Budget、API、评测）
+- `feature/zhenjiang-dag`：早期三 Agent 并行原型（保留作历史对照）
+
 ---
 
-## 为什么不是又一个旅行规划 Demo
+## 30 秒了解这个项目
 
-通用旅行规划助手通常是这样：
+通用旅行规划通常是：
 
 ```text
 用户输入城市 -> 一次 LLM 调用 -> 返回一段看起来合理的行程
 ```
 
-它的问题不是“生成得不够漂亮”，而是：
+它的问题不是文笔，而是不可信：
 
-- 景点可能不存在、价格可能编造；
-- 不知道景点周几闭馆、两个点之间要多久；
+- 景点可能不存在，价格可能编造；
+- 不知道闭馆日、两个点之间要多久；
 - 预算四项相加对不上；
-- 失败时返回假数据，而不是降级或报错；
-- 换一个城市、换一次生成，结果就不可复现。
+- 失败时返回假数据，而不是报错或降级；
+- 同参数重新生成，结果不可复现。
 
 这个项目换了一个思路：
 
-> **LLM 只负责“在可行候选里做取舍”，代码负责“事实、约束、预算、失败语义”。**
+```text
+代码是控制面，LLM 是数据面。
+Planner 只选 ID，代码展开事实、校验约束、计算预算。
+失败就报错或降级，不返回假行程。
+```
 
-具体做法：
+---
 
-- 景点/酒店/餐厅都有稳定 ID，Planner 只输出 ID；
-- 价格、坐标、营业时间由数据层提供，LLM 不写；
-- Validator 检查闭馆日、每日时长、三餐、ID 存在性；
-- Budget 用代码算钱，保证 `明细之和 = 总额`；
-- 每个节点有 Trace，失败有明确语义；
-- 只做镇江，先把一个城市的数据和约束做深。
+## 主链路 vs 旧链路
+
+项目经历过一次架构收敛，面试时建议主动讲清楚，而不是把两套混在一起。
+
+| 链路 | 用途 | 关键类/文件 |
+|---|---|---|
+| **v1 主链路** | 当前 API 使用 | `api/v1` → `TripService` → `DAGExecutor` → `PlannerAgent` + CSV |
+| **旧三 Agent 原型** | 历史/对照，已合并保留 | `MultiAgentTripPlanner`、`AmapService`、旧 `api/routes/trip.py` |
+| **旧 MySQL 价格库** | 原型阶段预算 | `BudgetCalculator`、`PriceRepository`、`price_normalizer` |
+
+当前 v1 的核心变化：
+
+- Planner 从“写名称/价格”收敛为“只输出 ID”；
+- 预算从“LLM 估算 + 名称匹配”收敛为“代码按 ID 查价”；
+- 数据从“高德 MCP 取数”收敛为“本地 CSV + 稳定 ID”；
+- 失败从“默认提示兜底”收敛为“明确失败/降级，不返回假行程”。
 
 ---
 
@@ -49,10 +68,10 @@
 
 输出：
 
-- 每天 2–3 个景点，按区域组织；
+- 每天 2–3 个景点，按主题/区域组织；
 - 酒店、早中晚三餐；
-- 景点门票/酒店/餐饮/交通四项预算，以及每条费用的来源；
-- 天气参考、地图点位、执行轨迹；
+- 门票/酒店/餐饮/交通四项预算，以及每条费用的来源；
+- 天气参考、地图点位、执行 Trace；
 - 编辑后可重新校验并重算预算。
 
 没有 API Key 也能看示例：
@@ -70,9 +89,9 @@ http://localhost:5173/result?demo=1
 ```mermaid
 flowchart LR
   UI[Vue3] --> API[FastAPI v1]
-  API --> SVC[TripService<br/>缓存/幂等/快照]
+  API --> SVC[TripService<br/>缓存/幂等/限流/快照]
   SVC --> DAG[DAG Executor]
-  DAG --> DATA[CSV/价格/后续 MySQL]
+  DAG --> DATA[CSV 数据/价格]
   DAG --> LLM[Planner LLM]
   DAG --> VAL[Validator]
   DAG --> BUD[Budget]
@@ -80,15 +99,23 @@ flowchart LR
   SVC --> TRACE[Trace / eval]
 ```
 
-DAG：
+五个节点：
 
 ```text
 load_dataset -> plan(LLM) -> validate(代码) -> budget(代码) -> render(代码)
 ```
 
+- `load_dataset`：加载并校验镇江 CSV；
+- `plan`：LLM 只输出景点/酒店/餐厅 ID；
+- `validate`：检查日期、闭馆日、三餐、每日时长、ID；
+- `budget`：按 ID 查价格，生成明细并强制 `total = sum(lines)`；
+- `render`：把 ID 展开成前端响应。
+
 详细设计见 [docs/architecture.md](docs/architecture.md)。
 
-### LLM 的边界
+---
+
+## LLM 的边界
 
 | LLM 负责 | LLM 不负责 |
 |---|---|
@@ -122,7 +149,7 @@ Planner 的输出只有 ID：
 
 ## 评测结果
 
-完整报告：[eval/report.md](eval/report.md)。15 条镇江 case，3 个系统对比：
+完整报告：[eval/report.md](eval/report.md)。15 条镇江 case，三个系统对比：
 
 | 系统 | 用例 | 结构合法率 | must-see 覆盖 | ID 幻觉率 | 预算恒等 | 超预算率 | P50 | P95 | 平均 Token |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -130,7 +157,7 @@ Planner 的输出只有 ID：
 | 规则保底（无 LLM） | 15 | 100% | 54.4% | 0% | 100% | 6.7% | 12.6ms | 14.5ms | 0 |
 | 单次 LLM（无 repair） | 5 | 100% | 100% | 0% | 100% | 0% | 6.9s | 23.1s | 5656 |
 
-怎么读这张表：
+怎么读：
 
 - **结构合法率**：Validator 是否通过；
 - **must-see 覆盖**：case 声明的期望景点是否被选中；
@@ -142,7 +169,7 @@ Planner 的输出只有 ID：
 
 - LLM 的偏好匹配明显优于规则保底（100% vs 54.4%）；
 - 规则保底零 Token、毫秒级，证明校验/预算链路本身是通的；
-- 26.7% 的 case 超预算，这是下一步“预算内二次规划”的输入，不是造假；
+- 26.7% 的 case 超预算，是下一步“预算内二次规划”的输入，不是造假；
 - 当前平均 6.3k Token/次，P50 约 13 秒。
 
 ---
@@ -155,7 +182,7 @@ Planner 的输出只有 ID：
 | 后端 | Python 3.11 + FastAPI + Pydantic v2 |
 | Agent 编排 | 自研确定性 DAG（节点/并行/超时/重试/失败隔离/Trace） |
 | LLM | OpenAI-compatible（DeepSeek / OpenAI / Qwen / 本地） |
-| 数据 | 镇江 CSV 数据集；MySQL 价格库预留 |
+| 数据 | 镇江 CSV 数据集；MySQL `zj_*` 表预留 |
 | 缓存 | Redis（可选）/ 进程内存缓存 |
 | 评测 | 15 条 case + 三系统基线 + Markdown/JSON 报告 |
 | 部署 | Docker Compose + GitHub Actions |
@@ -236,6 +263,8 @@ VITE_API_BASE_URL=http://localhost:8000
 VITE_AMAP_WEB_JS_KEY=你的高德 JS API Key
 ```
 
+> v1 核心链路不依赖高德；`AMAP_API_KEY` 只影响旧地图/MCP 路由。
+
 ---
 
 ## API
@@ -277,6 +306,43 @@ curl -X POST http://localhost:8000/api/v1/trips \
 
 ---
 
+## 一次请求的完整流程
+
+```text
+Home.vue
+  -> POST /api/v1/trips
+  -> create_trip() / Pydantic 校验
+  -> TripService.plan()
+       -> 幂等检查
+       -> 限流
+       -> 计划缓存
+       -> run_llm_pipeline_context_async()
+  -> DAGExecutor
+       -> load_dataset
+       -> plan(LLM)
+       -> validate
+       -> budget
+       -> render
+  -> 保存 trip 快照 / plan 缓存 / 幂等缓存
+  -> TripPlanResponse
+  -> Result.vue：行程 + Trace + 预算 + 地图
+```
+
+编辑后：
+
+```text
+Result.vue
+  -> POST /api/v1/trips/{trip_id}/recalculate
+  -> TripService.recalculate()
+       -> validate_plan
+       -> budget_plan
+       -> render_trip
+```
+
+重算不调用 LLM，只走校验、预算、渲染。
+
+---
+
 ## 项目结构
 
 ```text
@@ -286,11 +352,12 @@ backend/
     dag/
       graph.py                 # NodeSpec / Graph / 拓扑排序 / Mermaid
       executor.py              # 并行 / 超时 / 重试 / 失败隔离 / Trace
-      llm_pipeline.py          # load -> plan -> validate -> budget -> render
+      context.py               # TripContext / NodeResult / TripResult
+      llm_pipeline.py          # 真实五节点图
       walking_skeleton.py      # 无 LLM 的确定性基线
     domain/models.py           # 请求 / Facts / PlanDraft / Budget / Validation
     infra/                     # Redis 缓存 / UTF-8 日志
-    services/trip_service.py   # 缓存 / 幂等 / 限流 / 重算
+    services/trip_service.py   # 缓存 / 幂等 / 限流 / 快照 / 重算
     api/v1/                    # FastAPI v1
     data/zhenjiang/            # 18 景点 / 10 酒店 / 12 餐厅 / 12 知识卡
   tests/                       # 105 个测试
@@ -302,7 +369,7 @@ docs/
   architecture.md              # 架构 / DAG / LLM 边界
   adr/001-deterministic-dag.md # 决策记录
   scope-freeze.md              # 范围冻结
-  deployment.md                # 上线部署清单（Cloudflare Tunnel / Caddy / WSL Redis）
+  deployment.md                # 上线部署清单
   demo-script.md               # 3 分钟讲稿
   benchmarks.md                # 历史基准
 frontend/
@@ -312,6 +379,40 @@ frontend/
   src/components/BudgetPanel.vue
   public/demo-trip.json        # 无 Key 示例
 ```
+
+---
+
+## 工程细节
+
+### 缓存与幂等
+
+| 用途 | Key | TTL |
+|---|---|---:|
+| 计划缓存 | `plan:{request_hash}` | 1h |
+| 行程快照 | `trip:{trip_id}` | 1h |
+| 幂等 | `idem:{Idempotency-Key}` | 10min |
+| 限流 | `rate:{ip}:{minute}` | 60s |
+
+未配置 `REDIS_URL` 时自动使用 `MemoryCache`；多 worker 部署需要 Redis。
+
+### 并发隔离
+
+- 每个请求独立 `TripContext`；
+- Planner 不携带跨请求 history；
+- 缓存 key 按 request hash / trip id 隔离；
+- 测试覆盖两个不同日期并发不串。
+
+### 失败语义
+
+| 失败 | 行为 |
+|---|---|
+| Planner JSON/ID 非法 | 带错误反馈重试 1 次；仍失败抛错 |
+| Validator blocking | DAG 失败，返回问题列表 |
+| 可选节点失败 | `degraded`，下游继续 |
+| 缓存/Redis 不可用 | 回退内存缓存 |
+| 地图/图片失败 | 前端降级，不影响文字行程 |
+
+**没有“城市景点1”这种假兜底。**
 
 ---
 
@@ -342,7 +443,7 @@ cd backend
 python -m app.eval.run --limit 15 --single-limit 5
 ```
 
-只重跑单次基线（复用已有 current/rule 结果）：
+只重跑单次基线：
 
 ```powershell
 python -m app.eval.run --single-only --single-limit 5 --single-delay 2
@@ -383,6 +484,7 @@ LangGraph 的 checkpoint/streaming 对这个项目不是刚需。
 - 26.7% 的评测 case 超预算，后续可加“预算内二次规划/替换建议”。
 - 旧 `/api/trip/plan` 仍保留用于回滚；新前端走 `/api/v1`。
 - 未配置 Redis 时使用单进程 MemoryCache；多 worker 部署需要 Redis。
+- `feature/zhenjiang-dag` 的三 Agent 并行原型已合并保留，但不在 v1 主链路。
 
 ---
 
