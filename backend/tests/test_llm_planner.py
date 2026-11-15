@@ -1,4 +1,8 @@
-"""Day 3 tests: LLM Planner structured output, repair retry and LLM DAG."""
+"""Day 3 测试：LLM Planner 的结构化输出、repair 重试与 LLM 版 DAG。
+
+分两段：前半段只测 PlannerAgent（用 FakeLLM 隔离网络），
+后半段测整条 LLM 链路（五节点 trace + 失败必须响亮）。
+"""
 
 import json
 
@@ -11,6 +15,7 @@ from app.domain.models import TripRequest
 from app.llm.client import LLMResult
 
 
+# 两天基准请求；days != 2 时结束日期顺延到 11-03
 def make_request(days: int = 2, budget: int = 800) -> TripRequest:
     return TripRequest(
         city="镇江",
@@ -24,6 +29,7 @@ def make_request(days: int = 2, budget: int = 800) -> TripRequest:
     )
 
 
+# 一份合法计划，各用例在它上面做单点破坏，用来验证 repair 是否真的修好了
 def valid_plan() -> dict:
     return {
         "days": [
@@ -56,6 +62,8 @@ def valid_plan() -> dict:
     }
 
 
+# 假 LLM：按调用顺序吐预设内容，元素是 Exception 就抛（模拟网络失败）。
+# calls 记录每次的 messages，用来断言 repair 有没有把错误提示回灌给模型
 class FakeLLM:
     def __init__(self, contents: list[str | Exception]) -> None:
         self.contents = contents
@@ -77,6 +85,8 @@ class FakeLLM:
         )
 
 
+# 一次就成：attempts=1，token 统计和 prompt 版本随结果一起返回
+# （这两个字段是评测统计成本的入口）
 def test_planner_returns_valid_plan():
     llm = FakeLLM([json.dumps(valid_plan(), ensure_ascii=False)])
     facts = load_facts("2026-11-01", 2)
@@ -90,6 +100,8 @@ def test_planner_returns_valid_plan():
     assert result.prompt_version == "planner_v1"
 
 
+# 第一次不是 JSON：repair 要把"不合法"的提示回灌给模型再问一次，
+# 所以断言三件事——重试了 2 次、发了 2 轮 messages、第二轮里带着错误说明
 def test_planner_repairs_invalid_json():
     llm = FakeLLM(["这不是 JSON", json.dumps(valid_plan(), ensure_ascii=False)])
     facts = load_facts("2026-11-01", 2)
@@ -101,6 +113,8 @@ def test_planner_repairs_invalid_json():
     assert any("不合法" in message["content"] for message in llm.calls[1])
 
 
+# 第一次选了不存在的 A999：靠 PlannerAgent._validate_ids 早筛拦住（还没到
+# validate_plan），第二次换成合法 ID 就通过
 def test_planner_repairs_unknown_id():
     bad = valid_plan()
     bad["days"][0]["attraction_ids"] = ["A999", "A002"]
@@ -113,6 +127,8 @@ def test_planner_repairs_unknown_id():
     assert result.plan.days[0].attraction_ids == ["A001", "A002"]
 
 
+# 两次都给坏数据：直接抛 PlannerError。
+# 这条守的是项目底线——修不好就报错，不许退化成一份假计划
 def test_planner_raises_after_retries_without_fake_plan():
     llm = FakeLLM(["bad", "still bad"])
     facts = load_facts("2026-11-01", 2)
@@ -121,6 +137,8 @@ def test_planner_raises_after_retries_without_fake_plan():
         PlannerAgent(llm).plan(make_request(), facts)
 
 
+# 模型爱在外面套 ```json 围栏：要能剥掉围栏正常解析，
+# 这不算失败，attempts 仍然是 1
 def test_planner_accepts_fenced_json():
     fenced = "```json\n" + json.dumps(valid_plan(), ensure_ascii=False) + "\n```"
     llm = FakeLLM([fenced])
@@ -130,8 +148,9 @@ def test_planner_accepts_fenced_json():
     assert result.attempts == 1
 
 
+# 闭馆日也要能早筛：第一天排了周一闭馆的 A004（2026-11-02 是周一），
+# 修好后换成 A001。注意请求和 facts 的日期都得跟着改成 11-02 起
 def test_planner_repairs_closed_day():
-    # 2026-11-02 is Monday; A004 is closed on Monday.
     bad = valid_plan()
     bad["days"][0]["date"] = "2026-11-02"
     bad["days"][1]["date"] = "2026-11-03"
@@ -161,6 +180,8 @@ def test_planner_repairs_closed_day():
     assert result.plan.days[0].attraction_ids == ["A001", "A002"]
 
 
+# 少一顿饭且两轮都没修好 -> PlannerError。
+# 和上面"ID 不存在"的区别：这是结构性缺陷，模型连续两次犯同一个错就该放弃
 def test_planner_rejects_missing_meal():
     bad = valid_plan()
     bad["days"][0]["meals"] = bad["days"][0]["meals"][:2]
@@ -171,6 +192,8 @@ def test_planner_rejects_missing_meal():
         PlannerAgent(llm).plan(make_request(), facts)
 
 
+# 整条 LLM 链路：五节点 trace 齐全、校验通过、预算恒等；
+# plan 节点那条 trace 里带 attempts 和 token —— 评测脚本就是从这里取数的
 def test_llm_pipeline_uses_planner_and_dag():
     llm = FakeLLM([json.dumps(valid_plan(), ensure_ascii=False)])
     planner = PlannerAgent(llm)
@@ -192,6 +215,8 @@ def test_llm_pipeline_uses_planner_and_dag():
     assert plan_event.meta["total_tokens"] == 150
 
 
+# 全链路底线：Planner 修不好 -> plan 节点 failed -> 下游全 skipped
+# -> 抛 RuntimeError（到 API 就是 502），绝不返回编造的行程
 def test_llm_pipeline_fails_loudly_instead_of_fake_plan():
     llm = FakeLLM(["bad", "still bad"])
     planner = PlannerAgent(llm)

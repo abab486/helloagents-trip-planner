@@ -1,10 +1,10 @@
-"""Day 1 walking skeleton, now executed as a Day 2 DAG.
+"""Day 1 的走路骨架，现在改由 Day 2 的 DAG 方式执行。
 
-Pipeline:
+流水线：
     load_dataset -> fake_plan -> validate -> budget -> render
 
-Still no LLM, MySQL or Redis. Keeping this script runnable gives us a
-regression baseline before Day 3 swaps fake_plan for a real LLM planner:
+依然不碰 LLM、MySQL、Redis。保留它能跑，是为 Day 3 用真实 LLM 替换
+fake_plan 之前先留一条回归基线：
 
     python -m app.dag.walking_skeleton --days 2 --budget 800
 """
@@ -44,6 +44,22 @@ from .context import (
 from .executor import DAGExecutor
 from .graph import Graph
 
+
+"""
+TRANSPORT_DAILY = {"公共交通": 30, "步行": 0, "打车": 80, "自驾": 100, "混合": 40} —— 一个人一天在城里移动的固定开销，不是按距离算的。
+
+_season_for_month：3-5 春、6-8 夏、9-11 秋、其余冬。镇江在江苏，这个划分没问题。
+
+_eligible(景点, 当天, 请求) —— 三道门槛
+
+今天是不是闭馆日（周一博物馆关门）
+这个季节开不开（CSV 里 5 个景点标的是 春|秋，夏天冬天不该去）
+同行有老人时，步行强度 3 级以上的不去（walking_level >= 3 排除）
+_choose_hotel：先按用户选的住宿档位（经济型/舒适型/豪华/民宿）筛，筛不到就用全部；然后取最便宜的那家，价格相同按 ID 排。
+
+_choose_restaurant：三层优先级 —— 能提供这顿饭的 → 尽量同区域 → 尽量今天没吃过 → 取最便宜。used 是按天重置的，所以同一家餐厅可以在第二天再出现。
+"""
+# 常量
 MEAL_TYPES = ("breakfast", "lunch", "dinner")
 MEAL_LABELS = {"breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐"}
 TIER_BY_ACCOMMODATION = {
@@ -58,11 +74,12 @@ DEFAULT_MEAL_PRICE = {"breakfast": 30, "lunch": 50, "dinner": 70}
 MAX_DAILY_MINUTES = 540
 
 
+# 日期列表
 def _date_list(start_date: str, days: int) -> list[date]:
     start = date.fromisoformat(start_date)
     return [start + timedelta(days=index) for index in range(days)]
 
-
+# 季节判断
 def _season_for_month(month: int) -> str:
     if month in (3, 4, 5):
         return "春"
@@ -72,11 +89,11 @@ def _season_for_month(month: int) -> str:
         return "秋"
     return "冬"
 
-
+# 默认交通模式
 def _transport_mode(value: str) -> str:
     return value if value in TRANSPORT_DAILY else "公共交通"
 
-
+# 景点是否可选
 def _eligible(attraction: AttractionCandidate, current: date, request: TripRequest) -> bool:
     if current.weekday() in attraction.closed_days:
         return False
@@ -86,7 +103,7 @@ def _eligible(attraction: AttractionCandidate, current: date, request: TripReque
         return False
     return True
 
-
+# 选择酒店
 def _choose_hotel(request: TripRequest, facts: Facts) -> HotelCandidate:
     tier = TIER_BY_ACCOMMODATION.get(request.accommodation, "")
     pool = [hotel for hotel in facts.hotels if hotel.tier == tier] or facts.hotels
@@ -94,7 +111,7 @@ def _choose_hotel(request: TripRequest, facts: Facts) -> HotelCandidate:
         raise RuntimeError("没有可用酒店数据")
     return min(pool, key=lambda hotel: (hotel.price_per_night, hotel.id))
 
-
+# 选择餐厅
 def _choose_restaurant(
     meal_type: str,
     area: str,
@@ -112,12 +129,12 @@ def _choose_restaurant(
     used.add(chosen.id)
     return chosen
 
-
+# 不借用LLM 凑出一套合法行程，规则规划器,基线非产品
 def fake_plan(request: TripRequest, facts: Facts) -> PlanDraft:
-    """Deterministic planner used only until the LLM Planner is wired in.
+    """确定性规划器，只用到真实 LLM Planner 接进来之前。
 
-    It does not try to be a good planner. It proves the ID contract:
-    the plan contains only IDs; facts/prices are expanded later.
+    它不试图成为一个好规划器，只证明 ID 契约成立：
+    计划里只有 ID，名称/门票等事实由后续节点展开。
     """
     dates = _date_list(request.start_date, request.travel_days)
     hotel = _choose_hotel(request, facts)
@@ -134,8 +151,8 @@ def fake_plan(request: TripRequest, facts: Facts) -> PlanDraft:
         if not pool:
             raise RuntimeError(f"{current.isoformat()} 没有可用景点")
 
-        # Curated ID order (A001, A002, ...) beats lexicographic area order,
-        # so the skeleton starts with the classic 金山寺 -> 西津渡 cluster.
+        # 必去优先，然后按 ID 字典序。策展的 ID 顺序（A001 金山寺 -> A002 西津渡）
+        # 比按区域名字排序更合理，能保证骨架从经典集群开始
         pool.sort(key=lambda item: (0 if item.must_see else 1, item.id))
         anchor = pool[0]
         same_area = [
@@ -174,6 +191,32 @@ def fake_plan(request: TripRequest, facts: Facts) -> PlanDraft:
     )
 
 
+"""
+阻塞级（blocking，会让整单失败）9 条：
+
+code	查什么
+DAY_COUNT_MISMATCH	计划天数 ≠ 请求天数
+DATE_MISMATCH	第 N 天的日期不对（日期必须严格连续）
+EMPTY_DAY	某天一个景点都没有
+UNKNOWN_ATTRACTION	景点 ID 在 CSV 里不存在（幻觉的第一道网）
+CLOSED_DAY	那天这个景点闭馆
+UNKNOWN_HOTEL	酒店 ID 不存在
+MISSING_MEAL	早/午/晚缺了哪顿
+UNKNOWN_RESTAURANT	餐厅 ID 不存在
+RESTAURANT_MEAL_TYPE	这家餐厅不卖这顿饭（比如早餐店被安排成晚餐）
+DUPLICATE_ATTRACTION	同一趟行程里同一个景点出现两次
+
+警告级（warning，只提示不拦截）4 条：
+code	查什么
+DAY_PACE	每天景点数不在 2–3 之间
+DAY_TOO_LONG	预计超过 540 分钟（9 小时）
+MUST_SEE_COVERAGE	必去景点覆盖数 < min(2, 天数)
+MISSING_WEATHER	天气没覆盖出行日期
+「预计时长」怎么算的：60 分钟（吃饭休息）+ 各景点时长之和 + 每多一个景点加 20 分钟（路上）。是个粗糙但诚实的估算。
+
+passed 的判据在 ValidationResult 里：只要有一条 blocking 就不通过，warning 再多都算通过。所以“超预算”和“太累”这类事永远不会拦住用户，只会显示成黄条。
+"""
+# 规则校验器，分blocking/warning
 def validate_plan(
     plan: PlanDraft,
     facts: Facts,
@@ -301,7 +344,15 @@ def validate_plan(
 
     return result
 
-
+"""
+budget_plan —— 四项钱
+项	    怎么算	                                              source
+景点	每个景点一张票，ticket_price                           直接取 CSV	csv
+酒店	nights = max(天数-1, 1) 晚，每晚取“当天那家酒店”的价格	 csv / default
+餐饮	每顿取餐厅 avg_price，找不到餐厅用默认价（早30/午50/晚70）	csv / default
+交通	TRANSPORT_DAILY[模式] × 天数，每天固定	                default
+"""
+# 算钱
 def budget_plan(
     plan: PlanDraft,
     facts: Facts,
@@ -395,7 +446,7 @@ def budget_plan(
 
     return BudgetReport.from_lines(lines, budget_limit=request.budget_limit)
 
-
+# 渲染行程 render_trip：ID 展开成名字、门票、坐标
 def render_trip(context: TripContext) -> TripResult:
     if context.facts is None or context.plan is None or context.budget is None:
         raise RuntimeError("render_trip 需要 facts / plan / budget")
@@ -494,6 +545,8 @@ def render_trip(context: TripContext) -> TripResult:
 # ---------------------------------------------------------------------------
 # Day 2: the same five steps, now as DAG nodes
 # ---------------------------------------------------------------------------
+
+# DAG节点包装+建图+同步入口+CLI
 def load_dataset_node(context: TripContext) -> NodeResult:
     facts = load_facts(
         context.request.start_date,
@@ -541,11 +594,12 @@ def budget_node(context: TripContext) -> NodeResult:
 def render_node(context: TripContext) -> NodeResult:
     return NodeResult.ok(render_trip(context))
 
-
+# vbuild_llm_graph() 的差别只有一行：中间那个节点是 fake_plan_node 还是 make_llm_plan_node(planner)。
+# 换一个零件，用于评测
 def build_skeleton_graph() -> Graph:
-    """The Day 1 pipeline expressed as a DAG.
+    """把 Day 1 的流水线表达成一张 DAG。
 
-    Every node is required; Day 3+ will add optional tool nodes/conditions.
+    五个节点全是 required；可选工具节点和条件分支是 Day 3 以后的事。
     """
     graph = Graph()
     graph.add("load_dataset", load_dataset_node)
@@ -555,7 +609,7 @@ def build_skeleton_graph() -> Graph:
     graph.add("render", render_node, depends_on=("budget",))
     return graph
 
-
+# 同步入口 跑图、失败时收集 event.error 抛 ValueError、把完整 trace 补回 TripResult
 def run_walking_skeleton(request: TripRequest) -> TripResult:
     context = TripContext(request=request)
     execution = asyncio.run(DAGExecutor().run(build_skeleton_graph(), context))
@@ -574,8 +628,8 @@ def run_walking_skeleton(request: TripRequest) -> TripResult:
     if not isinstance(result, TripResult):
         raise RuntimeError("render 节点没有返回 TripResult")
 
-    # The render node runs before the executor records its own trace event;
-    # attach the complete trace after execution.
+    # render 节点是在执行器记录它自己那条 trace 之前跑的，
+    # 所以这里用执行完的完整 trace 覆盖一遍，补上缺的那一条。
     result.trace = list(execution.trace)
     result.degraded = context.degraded
     return result

@@ -43,6 +43,8 @@ class FakeRepository:
         return None
 
 
+# 假 Agent：可以指定耗时和异常，用来验证"三路并发"和"单路失败不拖垮整体"。
+# 它是同步的（time.sleep），正好对应老链路里三个子 Agent 的真实形态
 class SlowAgent:
     def __init__(self, response, delay=0.0, error=None):
         self.response = response
@@ -62,6 +64,8 @@ class SlowAgent:
         return self.response
 
 
+# 假 Agent：只回话 + 记下最后一次入参。
+# 用来断言"三路结果确实都被拼进了 planner 的 prompt"
 class CaptureAgent:
     def __init__(self, response):
         self.response = response
@@ -75,6 +79,7 @@ class CaptureAgent:
         return self.response
 
 
+# 老链路的请求模型（app/models/schemas.py），和新链路的 TripRequest 不是同一个类
 def make_request():
     return TripRequest(
         city="镇江",
@@ -87,6 +92,8 @@ def make_request():
     )
 
 
+# 绕过 __init__ 手工装配：只注入跑得起来的四个依赖，
+# 避开真 LLM / MySQL / Redis（__new__ 是这里的关键，不跑构造函数）
 def make_planner(attraction, weather, hotel, planner_response=PLAN_JSON):
     planner = MultiAgentTripPlanner.__new__(MultiAgentTripPlanner)
     planner.context_builder = ContextBuilder(max_token_budget=4000)
@@ -98,6 +105,8 @@ def make_planner(attraction, weather, hotel, planner_response=PLAN_JSON):
     return planner
 
 
+# 三路各睡 0.3s：串行要 0.9s 以上，真并发应该贴着 0.3s，
+# 所以 0.75 这个阈值能干净地区分两者（也是"56.9s→29.6s"那笔收益的单测版）
 def test_three_agents_run_in_parallel():
     delay = 0.3
     planner = make_planner(
@@ -115,6 +124,8 @@ def test_three_agents_run_in_parallel():
     assert plan.city == "镇江"
 
 
+# 天气那一路抛异常：整体仍然返回计划（return_exceptions=True），
+# 且三个 Agent 都只被调用一次——失败不会触发重跑
 def test_agent_failure_is_isolated():
     planner = make_planner(
         SlowAgent("**金山寺**（金山路62号）"),
@@ -131,6 +142,8 @@ def test_agent_failure_is_isolated():
     assert planner.hotel_agent.calls == 1
 
 
+# 三路结果必须都进 planner 的 prompt：景点名、天气、酒店名各查一处，
+# 少任何一项就说明上下文拼接漏了
 def test_planner_receives_all_three_results():
     planner = make_planner(
         SlowAgent("**金山寺**（金山路62号）"),

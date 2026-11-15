@@ -1,10 +1,15 @@
-"""Day 3 validation tests: hard constraints must fail before the UI sees a plan."""
+"""Day 3 校验测试：硬约束必须在前端看到行程之前就失败。
+
+每个用例都从"标准答案"出发只破坏一处，这样断言的是单条规则，
+而不是一堆规则混在一起的结果。
+"""
 
 from app.dag.walking_skeleton import budget_plan, validate_plan
 from app.data.loader import load_facts
 from app.domain.models import PlanDraft, TripRequest
 
 
+# 两天基准请求，只看日期范围，其余字段不影响校验规则
 def make_request(start: str = "2026-11-01", end: str = "2026-11-02") -> TripRequest:
     return TripRequest(
         city="镇江",
@@ -18,6 +23,8 @@ def make_request(start: str = "2026-11-01", end: str = "2026-11-02") -> TripRequ
     )
 
 
+# 一份"标准答案"计划：两天、每天 2 个景点、三餐齐全、酒店同区。
+# 各用例在它上面做单点破坏，改完仍然能构造成功（schema 层不拦），交给 validate_plan 判
 def valid_plan() -> dict:
     return {
         "days": [
@@ -49,6 +56,7 @@ def valid_plan() -> dict:
     }
 
 
+# 基线：什么都不改，一条 issue 都不该有（后面所有失败用例都靠它作对照）
 def test_valid_plan_passes():
     facts = load_facts("2026-11-01", 2)
     plan = PlanDraft.model_validate(valid_plan())
@@ -57,6 +65,7 @@ def test_valid_plan_passes():
     assert result.issues == []
 
 
+# 第二天又排了一次 A001 -> DUPLICATE_ATTRACTION，阻塞
 def test_duplicate_attraction_is_blocking():
     facts = load_facts("2026-11-01", 2)
     data = valid_plan()
@@ -69,6 +78,8 @@ def test_duplicate_attraction_is_blocking():
     assert any(issue.code == "DUPLICATE_ATTRACTION" for issue in result.issues)
 
 
+# A999 在 CSV 里不存在（典型幻觉）-> UNKNOWN_ATTRACTION。
+# 这是"LLM 只输出 ID"设计的第一道网：选错 ID 可以被 100% 检测
 def test_unknown_attraction_is_blocking():
     facts = load_facts("2026-11-01", 2)
     data = valid_plan()
@@ -81,6 +92,7 @@ def test_unknown_attraction_is_blocking():
     assert any(issue.code == "UNKNOWN_ATTRACTION" for issue in result.issues)
 
 
+# 周一（2026-11-02）排了闭馆的 A004 博物馆 -> CLOSED_DAY
 def test_closed_day_is_blocking():
     facts = load_facts("2026-11-02", 2)
     data = valid_plan()
@@ -95,6 +107,7 @@ def test_closed_day_is_blocking():
     assert any(issue.code == "CLOSED_DAY" for issue in result.issues)
 
 
+# 砍掉晚饭 -> MISSING_MEAL，阻塞（早/午/晚三顿缺一不可）
 def test_missing_meal_is_blocking():
     facts = load_facts("2026-11-01", 2)
     data = valid_plan()
@@ -107,6 +120,8 @@ def test_missing_meal_is_blocking():
     assert any(issue.code == "MISSING_MEAL" for issue in result.issues)
 
 
+# 超预算不破坏恒等式：total 仍等于四项之和，
+# over_budget 恰好等于 total - limit（这条由 BudgetReport 的 model_validator 兜底）
 def test_budget_over_limit_keeps_identity():
     facts = load_facts("2026-11-01", 2)
     plan = PlanDraft.model_validate(valid_plan())

@@ -1,13 +1,13 @@
-"""Async DAG executor with per-node timeout, retry and failure isolation.
+"""异步 DAG 执行器：节点级超时、重试与失败隔离。
 
-Semantics:
-    - required node failure  -> node failed; downstream nodes are skipped
-    - optional node failure  -> node degraded; downstream nodes still run
-    - condition false        -> node skipped; downstream nodes still run
-    - skipped dependencies   -> downstream still runs (intentional branch skip)
+四种状态，四种触发条件（这一段就是完整的行为规格）：
+    - required 节点失败 -> 节点 failed，下游节点全部 skipped
+    - optional 节点失败 -> 节点 degraded，下游节点照常执行
+    - 条件为假          -> 节点 skipped，下游节点照常执行
+    - 依赖被跳过        -> 下游照常执行（有意的分支跳过）
 
-This is a static DAG executor, not a workflow engine. It intentionally has no
-persistence/checkpointing; that keeps the control plane small and testable.
+这是一个静态 DAG 执行器，不是工作流引擎。刻意不做持久化/断点续跑，
+控制面才能小到一口气读完、写得动测试。
 """
 
 from __future__ import annotations
@@ -35,9 +35,14 @@ class ExecutionResult(BaseModel):
     elapsed_ms: float = 0.0
 
 
+"""
+执行器把"图怎么跑"拆成了三个正交的决定：
+层内并发由 gather 决定、失败语义由 required 决定、数据传递由 context 决定。语义设计是干净且有文档的；
+问题：它给同步节点配了一个无法真正取消的超时，又给并发节点共享了一个可变的 context——两个都是"能力已具备、约束未兑现"的休眠问题
+"""
 class DAGExecutor:
-    """Execute a Graph against a TripContext."""
-
+    """拿着 Graph 在 TripContext 上执行一次。"""
+    # 每层两个阶段，第一层判断所有的节点要不要跑，然后跑所有要跑的节点，第二层并发执行收集结果，返回ExecutionResult
     async def run(self, graph: Graph, context: TripContext) -> ExecutionResult:
         graph.validate()
         started = time.perf_counter()
@@ -119,6 +124,8 @@ class DAGExecutor:
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+    
+    # 对每一步重试 + 超时 + 降级包装，异常即数据，重试是真重试整个节点， optional 的降级包装（保证下游节点正常）
     async def _execute_node(
         self,
         spec: NodeSpec,
@@ -172,7 +179,8 @@ class DAGExecutor:
 
         last_result.meta["attempts"] = attempts
         return last_result, (time.perf_counter() - started) * 1000
-
+    
+    #同步节点走线程池
     async def _invoke(self, spec: NodeSpec, context: TripContext) -> Any:
         func = spec.func
         is_async = inspect.iscoroutinefunction(func) or inspect.iscoroutinefunction(
@@ -181,9 +189,9 @@ class DAGExecutor:
         if is_async:
             return await func(context)  # type: ignore[misc]
 
-        # Sync node: keep the event loop responsive. Note: asyncio.wait_for
-        # cannot stop a thread that already started; a timed-out sync node may
-        # continue in the background. Async nodes are preferred for IO.
+        # 同步节点走线程池，保证事件循环不被阻塞。但要注意：
+        # asyncio.wait_for 停不下一个已经启动的线程，超时的同步节点可能在
+        # 后台继续跑完（并继续写 context）。IO 场景优先写成异步节点。
         result = await asyncio.to_thread(func, context)  # type: ignore[arg-type]
         if inspect.isawaitable(result):
             return await result

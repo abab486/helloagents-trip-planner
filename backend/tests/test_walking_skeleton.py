@@ -1,4 +1,8 @@
-"""Day 1 walking skeleton end-to-end tests (CSV + fake planner, no LLM/DB)."""
+"""Day 1 走路骨架的端到端测试（读 CSV + 规则规划器，不碰 LLM/DB）。
+
+这里跑的是评测里的 rule 基线：零 Token、毫秒级，
+它的作用是证明"校验 + 预算链路本身是通的"。
+"""
 
 import json
 
@@ -7,6 +11,7 @@ from app.data.loader import load_facts
 from app.domain.models import TripRequest
 
 
+# 默认两天、公共交通、经济型的请求；days=3 时顺手把结束日期改掉
 def make_request(days: int = 2, budget: int = 800, **overrides) -> TripRequest:
     values = {
         "city": "镇江",
@@ -24,6 +29,8 @@ def make_request(days: int = 2, budget: int = 800, **overrides) -> TripRequest:
     return TripRequest(**values)
 
 
+# 数据加载的口径：18 景点 / 10 酒店 / 12 餐厅 / 8 交通 / 2 天假天气，
+# ID 不重复，天气日期和行程日期一一对应
 def test_loader_builds_facts():
     facts = load_facts("2026-11-01", 2)
     assert len(facts.attractions) == 18
@@ -36,6 +43,8 @@ def test_loader_builds_facts():
     assert len({item.id for item in facts.attractions}) == 18
 
 
+# 基准行程：结构合法、不超预算、四项之和等于 total（预算恒等）、
+# 景点不重复、每天 2–3 个、三餐齐全
 def test_two_day_plan_is_valid_and_budget_balanced():
     result = run_walking_skeleton(make_request(days=2, budget=800))
 
@@ -56,6 +65,7 @@ def test_two_day_plan_is_valid_and_budget_balanced():
     assert all(len(day.meals) == 3 for day in result.days)
 
 
+# trace 必须覆盖五个节点、顺序正确、状态全 ok（前端时间轴直接读它）
 def test_trace_has_expected_nodes():
     result = run_walking_skeleton(make_request())
     assert [event.node_id for event in result.trace] == [
@@ -68,6 +78,8 @@ def test_trace_has_expected_nodes():
     assert all(event.status.value == "ok" for event in result.trace)
 
 
+# 结果要能直接丢给前端：ID 已经展开成中文名（"金山寺"），
+# 而不是还留着 A001
 def test_result_is_json_serializable():
     result = run_walking_skeleton(make_request())
     payload = json.dumps(result.model_dump(mode="json"), ensure_ascii=False)
@@ -75,6 +87,7 @@ def test_result_is_json_serializable():
     assert "budget" in payload
 
 
+# 三天 6 个景点，且不重复（规则规划器靠 selected 集合去重）
 def test_three_day_plan_is_valid():
     result = run_walking_skeleton(make_request(days=3, budget=1500))
     assert len(result.days) == 3
@@ -88,6 +101,8 @@ def test_three_day_plan_is_valid():
     assert len(ids) == len(set(ids))
 
 
+# 超预算只标记、不拦截：validation 照样 passed，只有 budget.over_budget > 0。
+# （顺带这条例子里含一晚"不存在的房费"——nights = max(days-1, 1)）
 def test_one_day_over_budget_is_flagged_but_plan_is_still_valid():
     result = run_walking_skeleton(make_request(days=1, budget=300, end_date="2026-11-01"))
     assert result.validation.passed is True
@@ -95,8 +110,9 @@ def test_one_day_over_budget_is_flagged_but_plan_is_still_valid():
     assert result.budget.total > 300
 
 
+# _eligible 的第一道门槛：A004 镇江博物馆周一闭馆（closed_day=0），
+# 2026-11-02 正是周一，规则规划器不能把它排进去
 def test_monday_does_not_schedule_closed_museum():
-    # A004 镇江博物馆 is marked closed on Monday (0); 2026-11-02 is Monday.
     result = run_walking_skeleton(
         make_request(
             days=1,
@@ -112,6 +128,8 @@ def test_monday_does_not_schedule_closed_museum():
     assert "A004" not in ids
 
 
+# _eligible 的第三道门槛：带老人时步行强度 ≥3 的景点全部排除。
+# 注意这条只对 fake_plan 生效，validate_plan 并不查 walking_level
 def test_elderly_request_avoids_high_walking_attractions():
     result = run_walking_skeleton(
         make_request(days=3, budget=1500, party="elderly")

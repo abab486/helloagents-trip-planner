@@ -1,7 +1,7 @@
-"""DAG execution context, node results and trace events.
+"""DAG 执行上下文、节点回执与 Trace 事件。
 
-The walking skeleton (Day 1) and the real DAG executor (Day 2) share these
-contracts. Keeping them in one place makes the eventual executor swappable.
+Day 1 的骨架链路和 Day 2 的真实执行器共用这套契约。放在一处，
+将来换执行器时节点代码不用改。
 """
 
 from __future__ import annotations
@@ -22,16 +22,24 @@ from ..domain.models import (
     ValidationResult,
 )
 
+"""
+ DAG 的“记忆体”:NodeResult 规定工人怎么交差,TripContext 规定数据放哪儿,TraceEvent 规定过程怎么留痕。
+ 明确声明了“无跨请求状态、无全局历史”，这是相对旧链路 ContextBuilder 的对照。
+ 留了 5 个空字段给未来的 Critic/Weather/降级路径，还没有实现。
+ """
 
+# DAG状态 正常 / 降级 / 失败 / 跳过
+# 执行器贴，前端显示
 class NodeStatus(str, Enum):
     ok = "ok"
     degraded = "degraded"
     failed = "failed"
     skipped = "skipped"
 
-
+# 回执单：状态 + 一句结果 + 错误信息
+# 每个节点函数的返回值
 class NodeResult(BaseModel):
-    """Uniform result returned by every DAG node."""
+    """每个 DAG 节点统一返回的回执单。"""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -59,7 +67,8 @@ class NodeResult(BaseModel):
     def failed(cls, error: str, **meta: Any) -> "NodeResult":
         return cls(status=NodeStatus.failed, error=error, meta=meta)
 
-
+# 谁、多久、什么状态、错没错
+# 前端时间轴、评测报告
 class TraceEvent(BaseModel):
     node_id: str
     status: NodeStatus
@@ -71,9 +80,10 @@ class TraceEvent(BaseModel):
     error: str | None = None
     meta: dict[str, Any] = Field(default_factory=dict)
 
-
+# TripContext 是每次请求的上下文，节点之间通过修改同一个 TripContext 实例传递数据
+# 真实数据载体
 class TripContext(BaseModel):
-    """Per-request state. No global agent history, no cross-request state."""
+    """单次请求的状态。没有全局 Agent 历史，没有跨请求状态。"""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -127,8 +137,10 @@ class TripContext(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Rendered response views (Day 1 walking skeleton / future API response)
+# 给前端看的成品模型（Day 1 骨架用，也是未来 API 响应体的形状）
 # ---------------------------------------------------------------------------
+# 存在的唯一理由：PlanDraft 里只有 ID，而用户要看名字/门票/坐标，
+# 展开这一步必然产出新对象，所以 View 不是冗余
 class AttractionView(BaseModel):
     id: str
     name: str

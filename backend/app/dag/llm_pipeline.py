@@ -1,11 +1,10 @@
-"""LLM planning pipeline: DAG with a real Planner, no fake fallback.
+"""LLM 规划链路：带真实 Planner 的 DAG，没有假数据兜底。
 
-Graph:
+图：
     load_dataset -> plan(LLM) -> validate -> budget -> render
 
-This is the Day 3 path. The Day 1 walking skeleton remains available as a
-deterministic regression baseline, but this pipeline fails loudly instead of
-returning a fabricated plan when the LLM cannot produce a valid PlanDraft.
+这是 Day 3 的路径。Day 1 的走路骨架保留为确定性回归基线，但本链路在
+LLM 产不出合法 PlanDraft 时直接失败，而不是返回一份编造的行程。
 """
 
 from __future__ import annotations
@@ -29,8 +28,11 @@ from .walking_skeleton import (
 )
 
 
+# 闭包工厂，闭包是最轻的适配器：把依赖在构造期捕获，对外只暴露标准签名。
+# 换成 functools.partial 也行，但闭包能顺手做参数校验，planner=None 是合法输入
+# 节点之间不通过返回值传数据，而是通过修改同一个 TripContext 实例
 def make_llm_plan_node(planner: PlannerAgent | None):
-    """Bind a PlannerAgent to a DAG node."""
+    """把一个 PlannerAgent 绑成标准的 DAG 节点。"""
 
     def plan_node(context: TripContext) -> NodeResult:
         if planner is None:
@@ -52,6 +54,8 @@ def make_llm_plan_node(planner: PlannerAgent | None):
     return plan_node
 
 
+# graph 是静态的，DAGExecutor 只执行它，不修改它。节点之间不通过返回值传数据，而是通过修改同一个 TripContext 实例 
+# 纯链路，没有并行，本类只提供一个plan节点，load_dataset / validate / budget / render 四个全部从 walking_skeleton.py 导入  
 def build_llm_graph(planner: PlannerAgent | None) -> Graph:
     graph = Graph()
     graph.add("load_dataset", load_dataset_node)
@@ -66,6 +70,16 @@ def build_llm_graph(planner: PlannerAgent | None) -> Graph:
     return graph
 
 
+"""
+消费者	期望的契约	为什么不同
+Web 框架FastAPI	 async def,异常冒泡	不能阻塞事件循环；错误要靠 HTTP 状态码表达
+脚本 / CLI	 同步、返回退出码、打印到 stdout	命令行没有事件循环，失败要给人看
+测试	 同步、可断言、可注入替身	pytest 默认同步,planner 参数就是为了注入 FakePlanner
+其他服务代码（评测）	异步 + 中间状态	要统计 token、attempts、facts
+"""
+
+# 1惰性构造，2异步执行，3失败时抛异常，4成功时返回 TripResult 和 TripContext
+# 入口1：异步接口，API使用
 async def run_llm_pipeline_context_async(
     request: TripRequest,
     planner: PlannerAgent | None = None,
@@ -89,6 +103,7 @@ async def run_llm_pipeline_context_async(
     return result, context
 
 
+# 入口2：返回TripResult，只要结果的类用 空跑，被下一个函数内部调用
 async def run_llm_pipeline_async(
     request: TripRequest,
     planner: PlannerAgent | None = None,
@@ -97,14 +112,15 @@ async def run_llm_pipeline_async(
     return result
 
 
+# 入口3：同步接口，CLI/eval使用
 def run_llm_pipeline(
     request: TripRequest,
     planner: PlannerAgent | None = None,
 ) -> TripResult:
-    """Synchronous wrapper for CLI/smoke scripts; API uses the async version."""
+    """给 CLI/冒烟脚本用的同步包装；API 走异步版本。"""
     return asyncio.run(run_llm_pipeline_async(request, planner))
 
-
+# 入口4：主函数，用于 CLI 使用，打印JSON
 def main(argv: list[str] | None = None) -> int:
     parser = build_cli_parser()
     args = parser.parse_args(argv)
