@@ -1,13 +1,10 @@
-"""LLM Planner: choose IDs from typed facts, never write facts or prices.
+"""LLM 规划器：只从结构化事实里挑 ID，绝不自己写事实和价格。
 
-The planner is deliberately a thin, stateless component:
-    - one system prompt
-    - one structured payload
-    - JSON-only output
-    - one repair retry on invalid JSON / unknown IDs
+它刻意做得很薄、没有状态：一份 system prompt、一份结构化 payload、只回 JSON，
+遇到非法 JSON / 未知 ID 就返工一次。
 
-Full hard-constraint validation still belongs to the Validator node. This
-class only rejects obvious errors early so the LLM gets a chance to repair.
+完整的硬约束校验仍然归 Validator 节点；这里只提前挡掉明显的错，给模型一次
+自己改对的机会。
 """
 
 from __future__ import annotations
@@ -59,6 +56,17 @@ SYSTEM_PROMPT = """你是镇江行程规划器。
 """
 
 
+"""
+类/函数	         承诺	              兑现情况
+SYSTEM_PROMPT	8 条硬约束	           5 条被代码检查，3 条只写在文字里
+PlannerError	带上下文的结构化失败	三个字段外部零引用，router 的 except PlannerError 是死代码
+PlannerResult	可观测的成功回执	     7/9 字段被 trace 消费，latency_ms/raw_content 无人读
+extract_json	从废话里取 JSON	         三层降级有效；无长度限制、无截断恢复
+PlannerAgent.plan	失败重试一次	      路径 B 有效，路径 A 近乎无效；tokens/latency 口径不一致
+_build_payload	给模型刚好够的信息	      塞了重复 schema 和不被 prompt 提及的 must_see_ids
+_validate_ids	早筛 7 条	             6 条扎实，三餐那条漏重复餐型
+"""
+# 规划彻底失败时抛的异常，试了几次、最后一次错在哪、模型最后说了什么
 class PlannerError(RuntimeError):
     def __init__(
         self,
@@ -73,7 +81,7 @@ class PlannerError(RuntimeError):
         self.last_error = last_error
         self.raw_content = raw_content
 
-
+# 成功的回执 一份计划 + 七个成本/溯源指标
 class PlannerResult(BaseModel):
     plan: PlanDraft
     attempts: int
@@ -85,9 +93,9 @@ class PlannerResult(BaseModel):
     prompt_version: str = PROMPT_VERSION
     raw_content: str = ""
 
-
+# 从 LLM 响应中提取 JSON
 def extract_json(text: str) -> dict[str, Any]:
-    """Extract the first JSON object from an LLM response."""
+    """从模型回复里挖出第一个 JSON 对象（先剥掉 ``` 围栏和前后废话）。"""
     if not text or not text.strip():
         raise ValueError("LLM 返回为空")
 
@@ -109,9 +117,10 @@ def extract_json(text: str) -> dict[str, Any]:
         raise ValueError("LLM 输出的 JSON 顶层必须是对象")
     return data
 
-
+# 无状态的“提问机”——组装 payload、发请求、验收、不行就带着错误重发一次、还不行就抛异常。
+# 不记历史、不写事实
 class PlannerAgent:
-    """Stateless LLM planner with one repair retry."""
+    """无状态的 LLM 规划器，失败时只允许返工一次。"""
 
     def __init__(
         self,
@@ -128,6 +137,7 @@ class PlannerAgent:
         self.timeout = timeout
         self.max_retries = max_retries
 
+    # 最多问两次，第一次问错了，第二次带着错误提示再问一次
     def plan(self, request: TripRequest, facts: Facts) -> PlannerResult:
         payload = self._build_payload(request, facts)
         messages: list[dict[str, str]] = [
@@ -153,7 +163,7 @@ class PlannerAgent:
                     temperature=self.temperature,
                     timeout=self.timeout,
                 )
-            except Exception as exc:  # noqa: BLE001 - network/provider failure
+            except Exception as exc:  # noqa: BLE001 - 网络/服务商故障，节点失败要被兜住
                 last_error = exc
                 if attempt < attempts:
                     messages.append(
@@ -216,8 +226,9 @@ class PlannerAgent:
         )
 
     # ------------------------------------------------------------------
-    # Payload / early checks
+    # payload 组装 / 提前校验
     # ------------------------------------------------------------------
+    # 把“用户填的表 + 全城候选”压成一个大 JSON 当 user 消息
     @staticmethod
     def _build_payload(request: TripRequest, facts: Facts) -> dict[str, Any]:
         return {
@@ -241,7 +252,18 @@ class PlannerAgent:
             },
             "output_schema": PlanDraft.model_json_schema(),
         }
-
+    
+    # 一份“格式检查清单”，只查“引用对不对、形状对不对”，不查“合不合理”
+    """
+    序	行	查什么	怎么查的巧妙处
+1	L247–253	日期数量 + 连续	两边都转成 toordinal()，列表直接 !=，一行同时查了“数量”和“顺序”
+2	L262	每天 2–3 个景点	not 2 <= len(...) <= 3
+3	L266	景点 ID 存在	集合成员测试
+4	L268	全局不重复	seen_attractions 跨天累积
+5	L271	当天不闭馆	weekday in closed_days（0=周一，和 CSV 对齐）
+6	L276	酒店 ID 存在	集合成员测试
+7	L280–289	三餐齐全 + 餐型匹配	集合相等 + restaurant.serves()
+    """
     @staticmethod
     def _validate_ids(plan: PlanDraft, request: TripRequest, facts: Facts) -> None:
         expected_dates = [

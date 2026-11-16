@@ -1,4 +1,4 @@
-"""Eval harness tests: cases are loadable and the rule baseline works offline."""
+"""评测脚本测试：用例能加载、规则基线能离线跑通。"""
 
 import asyncio
 
@@ -11,12 +11,15 @@ from app.eval.run import (
 )
 
 
+# 用例集固定 15 条且 id 不重复 —— 这个数字被 README 和报告引用，
+# 改了就等于评测口径变了
 def test_eval_cases_are_15_unique():
     cases = load_cases()
     assert len(cases) == 15
     assert len({case["id"] for case in cases}) == 15
 
 
+# case 的字段要原样搬进 TripRequest，尤其 party（老人/亲子会直接影响校验）
 def test_build_request_maps_case_fields():
     case = load_cases()[0]
     request = build_request(case)
@@ -26,6 +29,8 @@ def test_build_request_maps_case_fields():
     assert request.party == case["party"]
 
 
+# 规则基线（fake_plan）一个 token 不花，也必须结构合法 + 预算恒等；
+# 它的意义是证明"校验和计价链路本身通"，不是拿来和 LLM 比好坏
 def test_rule_baseline_runs_without_llm():
     row = asyncio.run(run_rule(load_cases()[0]))
     assert row.mode == "rule"
@@ -34,6 +39,8 @@ def test_rule_baseline_runs_without_llm():
     assert row.tokens == 0
 
 
+# 手造两条 CaseResult 验汇总口径：通过率/覆盖率/幻觉率/超预算率按条数算，
+# token 累加，P50 取中位数
 def test_summarize_metrics():
     rows = [
         CaseResult(
@@ -76,6 +83,8 @@ def test_summarize_metrics():
     assert summary["p50_latency_ms"] in {100.0, 300.0}
 
 
+# 关键口径：基础设施失败（断网/超时）要从质量分母里剔除 ——
+# 否则一次断网就会把 structure_pass_rate 拉低，看起来像模型的问题
 def test_infra_failure_is_excluded_from_quality_denominator():
     rows = [
         CaseResult(

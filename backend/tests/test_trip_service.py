@@ -1,4 +1,4 @@
-"""Trip service tests: cache, idempotency, rate limit, recalc, concurrency."""
+"""服务层测试：缓存、幂等、限流、重算、并发。"""
 
 import asyncio
 
@@ -14,6 +14,8 @@ from app.services.trip_service import (
 from tests.support import FakePlanner, make_plan, make_request
 
 
+# 造一个只依赖内存的服务实例：planner 可注入（默认 FakePlanner），
+# 缓存走 MemoryCache，限流阈值可调
 def make_service(planner=None, rate_limit=100):
     return TripService(
         planner=planner or FakePlanner(),
@@ -22,6 +24,8 @@ def make_service(planner=None, rate_limit=100):
     )
 
 
+# 正常规划：拿到结果 + trip_id，且快照里存了 request 和 plan。
+# 快照是 /recalculate 的唯一数据源，所以这条其实在守重算的前提
 def test_plan_returns_result_and_snapshot():
     service = make_service()
     outcome = asyncio.run(service.plan(make_request(), client_ip="test"))
@@ -34,6 +38,8 @@ def test_plan_returns_result_and_snapshot():
     assert len(snapshot.plan.days) == 2
 
 
+# 同参数请求两次：第二次必须命中计划缓存 —— planner 只调 1 次、
+# trip_id 不变、cached=True
 def test_plan_cache_avoids_second_planner_call():
     planner = FakePlanner()
     service = make_service(planner)
@@ -47,6 +53,8 @@ def test_plan_cache_avoids_second_planner_call():
     assert second.cached is True
 
 
+# 和上一条的区别：这里显式传 idempotency_key。
+# 幂等键优先于内容哈希，两条路径最终都指向同一个 trip_id
 def test_idempotency_returns_same_trip():
     planner = FakePlanner()
     service = make_service(planner)
@@ -64,6 +72,8 @@ def test_idempotency_returns_same_trip():
     assert second.cached is True
 
 
+# 阈值 2：第三次必须抛 RateLimitExceeded。
+# 每次换开始日期是为了绕开计划缓存，否则根本走不到限流判断
 def test_rate_limit_raises_after_limit():
     service = make_service(rate_limit=2)
 
@@ -76,6 +86,8 @@ def test_rate_limit_raises_after_limit():
         )
 
 
+# 重算不跑 DAG，只手工补三条 trace（validate/budget/render）——
+# 这个断言正好解释了"重算为什么是毫秒级"：plan 和 load_dataset 被跳过了
 def test_recalculate_updates_budget_and_trace():
     service = make_service()
     request = make_request()
@@ -95,12 +107,15 @@ def test_recalculate_updates_budget_and_trace():
     ]
 
 
+# 快照不存在 -> TripNotFound，API 层会把这条异常翻成 404
 def test_recalculate_missing_trip():
     service = make_service()
     with pytest.raises(TripNotFound):
         asyncio.run(service.recalculate("trip_missing", None))
 
 
+# 重算时的坏计划：抛 PlanValidationError 且带上 issues；
+# 用例特意断言 DUPLICATE_ATTRACTION（同一天排了两次 A001）
 def test_recalculate_rejects_invalid_plan():
     service = make_service()
     request = make_request()
@@ -114,6 +129,8 @@ def test_recalculate_rejects_invalid_plan():
     assert any(issue.code == "DUPLICATE_ATTRACTION" for issue in exc_info.value.issues)
 
 
+# 两个请求并发跑（FakePlanner 各延迟 0.1s），断言各自结果里的日期不串。
+# 守的是"一次请求一个 TripContext"，不是所有请求共用一份
 def test_concurrent_requests_do_not_mix_contexts():
     planner = FakePlanner(delay=0.1)
     service = make_service(planner, rate_limit=100)
@@ -134,6 +151,8 @@ def test_concurrent_requests_do_not_mix_contexts():
     assert outcomes[1].result.days[0].date == "2026-12-01"
 
 
+# 健康检查只读进程内状态：不调 LLM、不建连接，
+# 所以 FakePlanner 一次都没被调用，也能直接报 ok
 def test_health_does_not_call_llm():
     service = make_service()
     health = service.health()

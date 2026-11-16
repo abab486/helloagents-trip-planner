@@ -1,4 +1,4 @@
-"""API v1 tests with a fake planner; no network and no Redis required."""
+"""API v1 接口测试：用 FakePlanner 替身，不联网、不需要 Redis。"""
 
 from __future__ import annotations
 
@@ -18,6 +18,8 @@ from app.services.trip_service import TripService, get_trip_service  # noqa: E40
 from tests.support import FakePlanner, make_plan, make_request  # noqa: E402
 
 
+# 造一个装好的 TripService：假 planner + 内存缓存，限流阈值可调
+# （rate_limit=1 就是给后面那条 429 用例准备的）
 def make_service(rate_limit: int = 100) -> tuple[TripService, FakePlanner]:
     planner = FakePlanner()
     service = TripService(
@@ -28,11 +30,15 @@ def make_service(rate_limit: int = 100) -> tuple[TripService, FakePlanner]:
     return service, planner
 
 
+# 把 FastAPI 的 get_trip_service 换成刚造的服务，再包成 TestClient
+# 注意 dependency_overrides 是全局的，所以每个用例结束都必须 clear
 def make_client(service: TripService) -> TestClient:
     app.dependency_overrides[get_trip_service] = lambda: service
     return TestClient(app)
 
 
+# 用例夹具：yield 出 client/service/planner 三件套，finally 里清掉依赖覆盖，
+# 避免上一条用例的假服务漏到下一条
 @pytest.fixture
 def service_and_client():
     service, planner = make_service()
@@ -44,6 +50,8 @@ def service_and_client():
         app.dependency_overrides.clear()
 
 
+# 主路径：POST 返回 200，且响应体里的 request_id 必须等于 X-Request-ID 响应头
+# —— 这是中间件用 ContextVar 串起全链路之后，对外唯一看得见的证据
 def test_create_trip_returns_plan_and_request_id(service_and_client):
     client, _, _ = service_and_client
     request = make_request()
@@ -63,6 +71,8 @@ def test_create_trip_returns_plan_and_request_id(service_and_client):
     assert body["data"]["validation"]["passed"] is True
 
 
+# 同一个 Idempotency-Key 打两次：trip_id 相同、第二次 cached=True、
+# 且 planner 只被调 1 次 —— 说明幂等在进 DAG 之前就短路了
 def test_idempotency_returns_same_trip(service_and_client):
     client, _, planner = service_and_client
     request = make_request()
@@ -86,6 +96,8 @@ def test_idempotency_returns_same_trip(service_and_client):
     assert planner.calls == 1
 
 
+# /api/v1/graph 返回的是 Mermaid 文本（不是图对象）；
+# 断言里带 "load_dataset --> plan"，等于顺手验证了连线没断
 def test_graph_endpoint(service_and_client):
     client, _, _ = service_and_client
     response = client.get("/api/v1/graph")
@@ -95,6 +107,8 @@ def test_graph_endpoint(service_and_client):
     assert "load_dataset --> plan" in mermaid
 
 
+# 根 /health 和 /api/v1/health 返回结构不同，但都必须活着、
+# 都必须报出缓存后端名，且都不能碰 LLM
 def test_health_endpoints(service_and_client):
     client, _, _ = service_and_client
     for path in ("/health", "/api/v1/health"):
@@ -105,6 +119,8 @@ def test_health_endpoints(service_and_client):
         assert body["cache"] == "memory"
 
 
+# 编辑重算：酒店换成更贵的 H001，总价必须涨，
+# 同时 total 仍等于四条明细之和（预算恒等在这里再验一次）
 def test_recalculate_updates_budget(service_and_client):
     client, _, _ = service_and_client
     request = make_request()
@@ -129,6 +145,8 @@ def test_recalculate_updates_budget(service_and_client):
     )
 
 
+# 快照不存在 -> 404。这里 body 故意传 {}，用来确认
+# "找不到 trip" 的判断发生在 "plan 参数缺失" 之前
 def test_recalculate_missing_trip(service_and_client):
     client, _, _ = service_and_client
     response = client.post(
@@ -138,6 +156,8 @@ def test_recalculate_missing_trip(service_and_client):
     assert response.status_code == 404
 
 
+# 重算路径的坏计划 -> 422 + PLAN_INVALID + issues 列表；
+# 这是和主链路唯一的语义差异：主链路校验失败是 502，重算是 422
 def test_recalculate_invalid_plan(service_and_client):
     client, _, _ = service_and_client
     request = make_request()
@@ -160,6 +180,8 @@ def test_recalculate_invalid_plan(service_and_client):
     assert detail["issues"]
 
 
+# 限流：阈值设 1，第二次换个日期（避免命中计划缓存）就必须 429，
+# 且 Retry-After 要如实给出窗口剩余秒数
 def test_rate_limit_returns_429():
     service, _ = make_service(rate_limit=1)
     client = make_client(service)

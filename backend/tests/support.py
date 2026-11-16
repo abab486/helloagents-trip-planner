@@ -1,4 +1,4 @@
-"""Shared test fixtures/helpers (not collected by pytest)."""
+"""测试共用的夹具和辅助函数（文件名不带 test_，pytest 不会收集它）。"""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from app.agents.planner import PlannerResult
 from app.domain.models import DayPlanDraft, MealChoice, PlanDraft, TripRequest
 
 
+# 造一份镇江行程的基准请求；days 变了结束日期会自动跟着顺延，
 def make_request(
     days: int = 2,
     *,
@@ -32,6 +33,8 @@ def make_request(
     return TripRequest(**values)
 
 
+# 造一份结构合法的 PlanDraft（纯手写 ID，不查 CSV），
+# 给服务层和 API 测试当固定输入；hotel_id 可换，用来造"更贵/更便宜"的对比
 def make_plan(request: TripRequest, hotel_id: str = "H002") -> PlanDraft:
     attraction_pairs = [
         ("A001", "A002"),
@@ -59,8 +62,10 @@ def make_plan(request: TripRequest, hotel_id: str = "H002") -> PlanDraft:
     return PlanDraft(days=days, notes=["fake planner"])
 
 
+# 只实现 plan() 一个方法，所以能塞进任何期待 PlannerAgent 的位置；
+# 不跑 prompt、不做校验，测的是"planner 返回之后"的编排逻辑
 class FakePlanner:
-    """Duck-typed PlannerAgent for API/service tests; no network."""
+    """鸭子类型的 PlannerAgent 替身，给 API / 服务层测试用，不联网。"""
 
     def __init__(self, delay: float = 0.0) -> None:
         self.delay = delay
