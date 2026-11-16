@@ -1,8 +1,7 @@
-"""CSV -> domain facts loader.
+"""CSV 到领域事实（Facts）的装载器。
 
-Day 1 deliberately has no MySQL dependency: the walking skeleton reads the
-same CSV files that will later be imported into `zj_*` tables. This keeps the
-contract testable before infrastructure is wired in.
+Day 1 故意不依赖 MySQL：walking skeleton 直接读这几张 CSV，它们之后会原样
+导进 `zj_*` 表。好处是"数据长什么样"这份契约在上基础设施之前就能被测试。
 """
 
 from __future__ import annotations
@@ -34,16 +33,19 @@ _FAKE_WEATHER = (
 
 
 def _read_rows(filename: str, data_dir: Path = DATA_DIR) -> list[dict[str, str]]:
+    """整表读进内存，表头当 key。newline="" 是为了不让 Windows 的 \r\n 多造出空行。"""
     path = data_dir / filename
     with path.open("r", encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle))
 
 
 def _split(value: str) -> list[str]:
+    """把 `a|b|c` 拆成列表，顺手丢掉空串，所以结尾多个竖线也不会产生空元素。"""
     return [item.strip() for item in (value or "").split("|") if item.strip()]
 
 
 def _to_int(value: str, default: int = 0) -> int:
+    """转不动就吃默认值、不抛错。CSV 没有类型，兜底的责任在这一层。"""
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -51,6 +53,7 @@ def _to_int(value: str, default: int = 0) -> int:
 
 
 def _to_float(value: str, default: float = 0.0) -> float:
+    """同上，坐标用；写错就掉到 0.0，等于没有坐标。"""
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -58,14 +61,17 @@ def _to_float(value: str, default: float = 0.0) -> float:
 
 
 def _to_bool(value: str) -> bool:
+    """只认这四种写法，大写 "TRUE"/"YES" 会被判成 False。"""
     return (value or "").strip() in {"1", "true", "True", "yes"}
 
 
 def load_manifest(data_dir: Path = DATA_DIR) -> dict[str, Any]:
+    """读 manifest.json：数据版本号、条数、质量说明都在这里，没有校验。"""
     return json.loads((data_dir / "manifest.json").read_text(encoding="utf-8"))
 
 
 def _load_attractions(data_dir: Path) -> list[AttractionCandidate]:
+    """景点表。id/name/area/category 用下标取（缺了就炸），其余字段用 get 给默认值。"""
     result: list[AttractionCandidate] = []
     for row in _read_rows("attractions.csv", data_dir):
         result.append(
@@ -81,6 +87,7 @@ def _load_attractions(data_dir: Path) -> list[AttractionCandidate]:
                 duration_min=_to_int(row.get("duration_min", "90"), 90),
                 open_hours=row.get("open_hours", "").strip(),
                 closed_days=[
+                    # -1 是故意的"毒值"：models 只允许 0..6，CSV 里写成"周一"会在这里被 Pydantic 拦下
                     _to_int(day, -1) for day in _split(row.get("closed_days", ""))
                 ],
                 indoor=_to_bool(row.get("indoor", "0")),
@@ -98,7 +105,7 @@ def _load_attractions(data_dir: Path) -> list[AttractionCandidate]:
         )
     return result
 
-
+# 读行 → 逐字段转换 → 造 Pydantic 对象
 def _load_hotels(data_dir: Path) -> list[HotelCandidate]:
     result: list[HotelCandidate] = []
     for row in _read_rows("hotels.csv", data_dir):
@@ -160,9 +167,10 @@ def _load_transports(data_dir: Path) -> list[TransportFact]:
 
 
 def build_fake_weather(start_date: str, days: int) -> list[WeatherFact]:
-    """Deterministic placeholder weather for the Day 1 walking skeleton.
+    """给 Day 1 walking skeleton 用的确定性假天气。
 
-    Day 2 replaces this with real weather facts (forecast or seasonal average).
+    按 4 天模板轮转，同一天永远拿到同一份结果（评测可复现）；
+    天气是真的假，日期是真的真——Day 2 才换成预报或季节均价。
     """
     if days < 1:
         raise ValueError("days 必须 >= 1")
@@ -195,7 +203,11 @@ def load_facts(
     *,
     validate: bool = True,
 ) -> Facts:
-    """Load CSV facts. Raises ValueError if the dataset is structurally invalid."""
+    """把 CSV 装成 Facts。数据集结构不合法时抛 ValueError。
+
+    validate 默认开着，意味着每次调用都会把 5 张表全量校验一遍（365 行那套规则）。
+    数据只有几十行时无所谓，但它是按请求数重复的活儿，没有缓存。
+    """
     if validate:
         errors = validate_dataset(data_dir)
         if errors:
