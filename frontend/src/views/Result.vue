@@ -547,7 +547,9 @@ function planSegment(
   AMap: any,
   mode: string,
   from: [number, number],
-  to: [number, number]
+  to: [number, number],
+  fromName = '',
+  toName = ''
 ): Promise<{ path: [number, number][]; distance: number; time: number } | null> {
   const plugin: Record<string, string> = {
     步行: 'Walking',
@@ -561,10 +563,18 @@ function planSegment(
   return new Promise((resolve) => {
     try {
       if (pluginName === 'Transfer') {
-        const transfer = new AMap.Transfer({ city: '镇江市', hideMarkers: true })
-        transfer.search(
-          [new AMap.LngLat(from[0], from[1]), new AMap.LngLat(to[0], to[1])],
-          (status: string, result: any) => {
+        const transfer = new AMap.Transfer({
+          city: '镇江市',
+          cityd: '镇江市',
+          hideMarkers: true
+        })
+        const start = fromName
+          ? { keyword: fromName, city: '镇江市' }
+          : new AMap.LngLat(from[0], from[1])
+        const end = toName
+          ? { keyword: toName, city: '镇江市' }
+          : new AMap.LngLat(to[0], to[1])
+        transfer.search([start, end], (status: string, result: any) => {
             if (status !== 'complete' || !result?.plans?.length) {
               resolve(null)
               return
@@ -629,6 +639,16 @@ async function initMap() {
   }
 
   try {
+    // AMap JS API 2.0 的 Web 服务（路线规划/POI 等）需要安全密钥，
+    // 且必须在 JS API 脚本加载前设置。
+    const securityJsCode = import.meta.env.VITE_AMAP_SECURITY_JS_CODE
+    if (securityJsCode) {
+      ;(window as any)._AMapSecurityConfig = { securityJsCode }
+    } else {
+      console.warn('未配置 VITE_AMAP_SECURITY_JS_CODE，AMap 路径规划可能失败')
+      message.warning('未配置高德安全密钥，路径规划可能失败')
+    }
+
     const AMap = await AMapLoader.load({
       key,
       version: '2.0',
@@ -683,17 +703,27 @@ async function initMap() {
 
     const dayColors = ['#667eea', '#e67e22', '#27ae60', '#8e44ad', '#16a085', '#d35400', '#2c3e50']
     for (const [dayIndex, day] of tripData.value.days.entries()) {
-      const points = day.attractions
+      const waypoints = day.attractions
         .filter((item) => item.lat && item.lng)
-        .map((item) => [item.lng, item.lat] as [number, number])
-      if (points.length < 2) continue
+        .map((item) => ({
+          point: [item.lng, item.lat] as [number, number],
+          name: item.name
+        }))
+      if (waypoints.length < 2) continue
 
       const color = dayColors[dayIndex % dayColors.length]
-      for (let index = 0; index < points.length - 1; index += 1) {
-        const from = points[index]
-        const to = points[index + 1]
+      for (let index = 0; index < waypoints.length - 1; index += 1) {
+        const from = waypoints[index].point
+        const to = waypoints[index + 1].point
         // Serial on purpose: the JS route plugins share a QPS budget.
-        const route = await planSegment(AMap, day.transport_mode, from, to)
+        const route = await planSegment(
+          AMap,
+          day.transport_mode,
+          from,
+          to,
+          waypoints[index].name,
+          waypoints[index + 1].name
+        )
         const path = route?.path?.length ? route.path : [from, to]
         const hasRoute = Boolean(route?.path?.length)
 

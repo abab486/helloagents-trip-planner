@@ -101,9 +101,10 @@ VITE_API_BASE_URL=/
 
 ```env
 VITE_AMAP_WEB_JS_KEY=你的高德 JS Key
+VITE_AMAP_SECURITY_JS_CODE=你的高德安全密钥
 ```
 
-高德 JS Key 会出现在浏览器里，这是正常的，但要在高德控制台配置 **域名白名单**：
+高德 JS Key 会出现在浏览器里，这是正常的，但要在高德控制台配置 **域名白名单**；2021-12-02 之后申请的 Key 还需要同时配置安全密钥 `VITE_AMAP_SECURITY_JS_CODE`，否则路线规划会被拒绝：
 
 ```text
 https://trip.example.com

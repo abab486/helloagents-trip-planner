@@ -261,6 +261,7 @@ DB_NAME=trip_agent
 ```env
 VITE_API_BASE_URL=http://localhost:8000
 VITE_AMAP_WEB_JS_KEY=你的高德 JS API Key
+VITE_AMAP_SECURITY_JS_CODE=你的高德安全密钥
 ```
 
 > v1 核心链路不依赖高德；`AMAP_API_KEY` 只影响旧地图/MCP 路由。
@@ -481,7 +482,7 @@ LangGraph 的 checkpoint/streaming 对这个项目不是刚需。
 ## 已知边界
 
 - 价格为参考价，不承诺实时；出行前以景区当日公示为准。
-- 地图需要 `VITE_AMAP_WEB_JS_KEY`，未配置时只影响地图，不影响文字行程。
+- 地图需要 `VITE_AMAP_WEB_JS_KEY` 和 `VITE_AMAP_SECURITY_JS_CODE`；未配置时只影响地图/路线，不影响文字行程。
 - 编辑模式当前只支持删除景点；换酒店/换餐厅留给后续。
 - 26.7% 的评测 case 超预算，后续可加“预算内二次规划/替换建议”。
 - 旧 `/api/trip/plan` 仍保留用于回滚；新前端走 `/api/v1`。
