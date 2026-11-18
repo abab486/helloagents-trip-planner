@@ -10,6 +10,7 @@ from ..db.pool import get_connection
 from ..models.budget import PriceHit
 
 
+# 旧链路专用：新 v1 不连数据库，价格直接取 CSV 事实表（data/loader.py）
 class PriceRepository:
     """MySQL 价格查询"""
 

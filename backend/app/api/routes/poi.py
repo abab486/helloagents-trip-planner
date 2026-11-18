@@ -9,6 +9,7 @@ from ...services.unsplash_service import get_unsplash_service
 router = APIRouter(prefix="/poi", tags=["POI"])
 
 
+# 旧链路专用：只有本文件的 /poi/detail 路由用它，新 v1 没有 POI 详情接口
 class POIDetailResponse(BaseModel):
     """POI详情响应"""
     success: bool

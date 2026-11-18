@@ -159,6 +159,7 @@ PLANNER_AGENT_PROMPT = """你是行程规划专家。你的任务是根据景点
 """
 
 
+# 旧链路专用：新 v1 走 DAG 五节点 + PlannerAgent，这个类只被 api/routes/trip.py 调用
 class MultiAgentTripPlanner:
     """多智能体旅行规划系统"""
 

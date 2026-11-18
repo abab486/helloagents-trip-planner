@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 
 
+# 旧链路专用：新 v1 没有"命中来源"这一层，价格直接读 CSV 的 ticket_price / price_per_night
 @dataclass
 class PriceHit:
     """一次价格查询的命中结果"""
@@ -13,6 +14,7 @@ class PriceHit:
     matched: str         # 实际命中的标准名
 
 
+# 旧链路专用：新 v1 的明细项是 domain/models.py 的 BudgetLine（多一个 detail 字段）
 @dataclass
 class BudgetItem:
     """单个计费项"""
@@ -23,6 +25,7 @@ class BudgetItem:
     source: str          # alias / db / fuzzy / plan / default
 
 
+# 旧链路专用：新 v1 的账本是 domain/models.py 的 BudgetReport（构造期强制恒等式），同名但不同物
 @dataclass
 class BudgetReport:
     """预算重算报告：既用于日志，也方便测试断言"""

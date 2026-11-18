@@ -43,6 +43,7 @@ MAX_HOTELS = 3
 MAX_WEATHER = 4
 
 
+# 旧链路专用：新 v1 不靠它压 prompt，候选景点由 load_dataset 节点 + brief() 直接裁
 class ContextBuilder:
     """把原始长文本压缩成结构化、可控长度的 Planner 上下文"""
 

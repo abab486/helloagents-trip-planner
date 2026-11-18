@@ -25,6 +25,7 @@ DEFAULT_TRANSPORT_PRICE = {"公共交通": 30, "打车": 80, "自驾": 100, "步
 DEFAULT_TRANSPORT_FALLBACK = 40
 
 
+# 旧链路专用：新 v1 的预算走 walking_skeleton.budget_plan（读 CSV 的纯函数），不碰 MySQL
 class BudgetCalculator:
     """按确定性规则重算旅行预算"""
 

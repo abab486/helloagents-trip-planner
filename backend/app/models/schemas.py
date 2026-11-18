@@ -1,4 +1,10 @@
-"""数据模型定义"""
+"""数据模型定义
+
+【旧链路】本文件整份是旧链路的 schema，新 v1 一律用 app/domain/models.py。
+注意有两处同名不同物，改的时候别搞错文件：
+    TripRequest       —— 这里一份，domain/models.py 一份（校验规则不一样）
+    TripPlanResponse  —— 这里一份，api/v1/schemas.py 一份
+"""
 
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field, field_validator

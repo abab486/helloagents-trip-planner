@@ -9,6 +9,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+# 旧链路专用：ContextBuilder 洗高德返回的长文本时用，新 v1 直接读 CSV 的 AttractionCandidate
 class MiniAttraction(BaseModel):
     """精简景点：只保留名称、地址、建议游览时长"""
 
@@ -22,6 +23,7 @@ class MiniAttraction(BaseModel):
         return f"- {self.name}{address}"
 
 
+# 旧链路专用：同上，新 v1 的酒店事实是 domain/models.py 的 HotelCandidate
 class MiniHotel(BaseModel):
     """精简酒店：只保留名称和价格区间"""
 
@@ -33,6 +35,7 @@ class MiniHotel(BaseModel):
         return f"- {self.name}{price}"
 
 
+# 旧链路专用：同上，新 v1 的天气由 loader.build_fake_weather 直接造 WeatherFact
 class MiniWeather(BaseModel):
     """精简天气：日期 + 天气 + 温度，其余（风力、湿度等）丢弃"""
 
