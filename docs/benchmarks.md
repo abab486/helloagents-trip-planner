@@ -80,10 +80,10 @@ total: 1315
 | LLM + API | 100 | Planner/Validator/Budget/API/Redis/并发 |
 | 当前 | 105 | 加 eval harness 测试 |
 
-正式评测（2026-11-11，DeepSeek）：
+正式评测（2026-11-11 初测，2026-11-18 规则基线修正）：
 
 - 15 条当前系统：结构 100%，must-see 100%，ID 幻觉 0%，平均 6.3k Token；
-- 15 条规则保底：结构 100%，must-see 54.4%，0 Token；
+- 15 条规则保底：结构 100%，must-see 80.0%，0 Token；
 - 5 条单次 LLM：结构 100%，must-see 100%，P95 23.1s。
 
 ---

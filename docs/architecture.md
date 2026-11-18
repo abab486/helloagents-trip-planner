@@ -221,7 +221,7 @@ LangGraph 的 checkpoint/streaming 对这个项目不是刚需。
 
 ```text
 当前 DAG + LLM: 15/15 结构合法，must-see 100%，ID 幻觉 0%，平均 6.3k Token
-规则保底:        15/15 结构合法，must-see 54.4%，零 Token
+规则保底:        15/15 结构合法，must-see 80.0%，零 Token
 ```
 
 规则保底证明“校验 + 预算”链路本身是通的；LLM 的增益体现在偏好匹配。

@@ -151,9 +151,16 @@ def fake_plan(request: TripRequest, facts: Facts) -> PlanDraft:
         if not pool:
             raise RuntimeError(f"{current.isoformat()} 没有可用景点")
 
-        # 必去优先，然后按 ID 字典序。策展的 ID 顺序（A001 金山寺 -> A002 西津渡）
-        # 比按区域名字排序更合理，能保证骨架从经典集群开始
-        pool.sort(key=lambda item: (0 if item.must_see else 1, item.id))
+        # 用户点名的必去 ID 优先，其次是城市级推荐，最后按 ID 字典序。
+        # 策展的 ID 顺序（A001 金山寺 -> A002 西津渡）比按区域名字排序更合理，
+        # 能保证骨架从经典集群开始。
+        pool.sort(
+            key=lambda item: (
+                0 if item.id in request.must_see_ids
+                else (1 if item.must_see else 2),
+                item.id,
+            )
+        )
         anchor = pool[0]
         same_area = [
             item for item in pool if item.id != anchor.id and item.area == anchor.area

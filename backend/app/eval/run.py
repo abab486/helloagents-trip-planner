@@ -389,6 +389,11 @@ def write_report(
 async def main_async(args: argparse.Namespace) -> int:
     cases = load_cases()[: args.limit]
     model = os.getenv("LLM_MODEL_ID", "unknown")
+    single_rows: list[CaseResult] = []
+
+    if args.rule_only and args.single_only:
+        print("[FAIL] --rule-only 和 --single-only 不能同时使用")
+        return 1
 
     if args.single_only:
         if not REPORT_JSON.exists():
@@ -396,8 +401,36 @@ async def main_async(args: argparse.Namespace) -> int:
             return 1
         existing = json.loads(REPORT_JSON.read_text(encoding="utf-8"))
         rows = [CaseResult(**row) for row in existing.get("rows", [])]
+        single_rows = [
+            CaseResult(**row) for row in existing.get("single_rows", [])
+        ]
         model = existing.get("model", model)
         print(f"single-only: reuse {len(rows)} current/rule rows")
+    elif args.rule_only:
+        if not REPORT_JSON.exists():
+            print(f"[FAIL] 找不到已有报告: {REPORT_JSON}")
+            return 1
+        existing = json.loads(REPORT_JSON.read_text(encoding="utf-8"))
+        existing_rows = [CaseResult(**row) for row in existing.get("rows", [])]
+        current_by_id = {
+            row.case_id: row for row in existing_rows if row.mode == "current"
+        }
+        single_rows = [
+            CaseResult(**row) for row in existing.get("single_rows", [])
+        ]
+        model = existing.get("model", model)
+        print(f"rule-only: reuse {len(current_by_id)} current rows, rerun rule")
+        rows = []
+        for index, case in enumerate(cases, start=1):
+            current = current_by_id.get(case["id"])
+            if current is not None:
+                rows.append(current)
+            rule = await run_rule(case)
+            rows.append(rule)
+            print(
+                f"[rule {index:02d}/{len(cases)}] {case['id']}: "
+                f"{'OK' if rule.ok else 'FAIL'}"
+            )
     else:
         planner = PlannerAgent(create_llm_client(), max_retries=1)
         rows = []
@@ -413,8 +446,7 @@ async def main_async(args: argparse.Namespace) -> int:
                 f"rule={'OK' if rule.ok else 'FAIL'}"
             )
 
-    single_rows: list[CaseResult] = []
-    if args.single_limit > 0:
+    if not args.single_only and not args.rule_only and args.single_limit > 0:
         single_planner = PlannerAgent(
             create_llm_client(),
             max_retries=0,
@@ -459,6 +491,11 @@ def main(argv: list[str] | None = None) -> int:
         "--single-only",
         action="store_true",
         help="复用现有 report.json 的 current/rule 行，只重跑 single 基线",
+    )
+    parser.add_argument(
+        "--rule-only",
+        action="store_true",
+        help="复用现有 report.json 的 current/single 行，只重跑 rule 基线",
     )
     parser.add_argument(
         "--single-delay",

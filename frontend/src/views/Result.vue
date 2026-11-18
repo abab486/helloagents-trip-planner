@@ -109,7 +109,7 @@
           <div class="right-map">
             <a-card id="map" title="📍 景点地图" :bordered="false" class="map-card">
               <div id="amap-container"></div>
-              <p class="map-note">按天连线只表示游览顺序，不是实时导航路线。</p>
+              <p class="map-note">按天分段，步行/公交/驾车路线来自高德；规划失败的段用直线示意。</p>
             </a-card>
           </div>
         </div>
@@ -501,6 +501,125 @@ function handleImageError(event: Event) {
     )
 }
 
+function formatDistance(distance: number): string {
+  if (!Number.isFinite(distance) || distance <= 0) return '距离未知'
+  return distance < 1000 ? `${Math.round(distance)} 米` : `${(distance / 1000).toFixed(1)} 公里`
+}
+
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '耗时未知'
+  const minutes = Math.max(1, Math.round(seconds / 60))
+  if (minutes < 60) return `${minutes} 分钟`
+  return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`
+}
+
+function routeModeLabel(mode: string): string {
+  if (mode === '公共交通') return '公交'
+  if (mode === '打车' || mode === '自驾') return '驾车'
+  if (mode === '步行') return '步行'
+  return '步行参考'
+}
+
+function normalizeRoutePath(path: any[]): [number, number][] {
+  const points = (path || [])
+    .filter((point) => point && Number.isFinite(point.lng) && Number.isFinite(point.lat))
+    .map((point) => [point.lng, point.lat] as [number, number])
+  return points.filter(
+    (point, index) =>
+      index === 0 ||
+      point[0] !== points[index - 1][0] ||
+      point[1] !== points[index - 1][1]
+  )
+}
+
+function transferRoutePath(plan: any): [number, number][] {
+  const raw: any[] = []
+  for (const segment of plan?.segments || []) {
+    if (segment.transit?.path) raw.push(...segment.transit.path)
+    for (const step of segment.walking?.steps || []) {
+      if (step.path) raw.push(...step.path)
+    }
+  }
+  return normalizeRoutePath(raw)
+}
+
+function planSegment(
+  AMap: any,
+  mode: string,
+  from: [number, number],
+  to: [number, number]
+): Promise<{ path: [number, number][]; distance: number; time: number } | null> {
+  const plugin: Record<string, string> = {
+    步行: 'Walking',
+    打车: 'Driving',
+    自驾: 'Driving',
+    公共交通: 'Transfer',
+    混合: 'Walking'
+  }
+  const pluginName = plugin[mode] || 'Walking'
+
+  return new Promise((resolve) => {
+    try {
+      if (pluginName === 'Transfer') {
+        const transfer = new AMap.Transfer({ city: '镇江市', hideMarkers: true })
+        transfer.search(
+          [new AMap.LngLat(from[0], from[1]), new AMap.LngLat(to[0], to[1])],
+          (status: string, result: any) => {
+            if (status !== 'complete' || !result?.plans?.length) {
+              resolve(null)
+              return
+            }
+            const plan = result.plans[0]
+            const path = transferRoutePath(plan)
+            if (path.length < 2) {
+              resolve(null)
+              return
+            }
+            resolve({
+              path,
+              distance: Number(plan.distance) || 0,
+              time: Number(plan.time) || 0
+            })
+          }
+        )
+        return
+      }
+
+      const Router = AMap[pluginName]
+      if (!Router) {
+        resolve(null)
+        return
+      }
+      const router = new Router({ hideMarkers: true })
+      router.search(
+        [new AMap.LngLat(from[0], from[1]), new AMap.LngLat(to[0], to[1])],
+        (status: string, result: any) => {
+          if (status !== 'complete' || !result?.routes?.length) {
+            resolve(null)
+            return
+          }
+          const route = result.routes[0]
+          const path = normalizeRoutePath(
+            (route.steps || []).flatMap((step: any) => step.path || [])
+          )
+          if (path.length < 2) {
+            resolve(null)
+            return
+          }
+          resolve({
+            path,
+            distance: Number(route.distance) || 0,
+            time: Number(route.time) || 0
+          })
+        }
+      )
+    } catch (error) {
+      console.error('路线规划失败', error)
+      resolve(null)
+    }
+  })
+}
+
 async function initMap() {
   if (!tripData.value) return
   const key = import.meta.env.VITE_AMAP_WEB_JS_KEY
@@ -513,7 +632,15 @@ async function initMap() {
     const AMap = await AMapLoader.load({
       key,
       version: '2.0',
-      plugins: ['AMap.Marker', 'AMap.Polyline', 'AMap.InfoWindow']
+      plugins: [
+        'AMap.Marker',
+        'AMap.Polyline',
+        'AMap.InfoWindow',
+        'AMap.Text',
+        'AMap.Walking',
+        'AMap.Driving',
+        'AMap.Transfer'
+      ]
     })
 
     if (map) map.destroy()
@@ -554,20 +681,56 @@ async function initMap() {
     map.add(markers)
     if (markers.length) map.setFitView(markers)
 
-    tripData.value.days.forEach((day) => {
+    const dayColors = ['#667eea', '#e67e22', '#27ae60', '#8e44ad', '#16a085', '#d35400', '#2c3e50']
+    for (const [dayIndex, day] of tripData.value.days.entries()) {
       const points = day.attractions
         .filter((item) => item.lat && item.lng)
-        .map((item) => [item.lng, item.lat])
-      if (points.length < 2) return
-      const polyline = new AMap.Polyline({
-        path: points,
-        strokeColor: '#667eea',
-        strokeWeight: 4,
-        strokeOpacity: 0.8,
-        showDir: true
-      })
-      map.add(polyline)
-    })
+        .map((item) => [item.lng, item.lat] as [number, number])
+      if (points.length < 2) continue
+
+      const color = dayColors[dayIndex % dayColors.length]
+      for (let index = 0; index < points.length - 1; index += 1) {
+        const from = points[index]
+        const to = points[index + 1]
+        // Serial on purpose: the JS route plugins share a QPS budget.
+        const route = await planSegment(AMap, day.transport_mode, from, to)
+        const path = route?.path?.length ? route.path : [from, to]
+        const hasRoute = Boolean(route?.path?.length)
+
+        const polyline = new AMap.Polyline({
+          path,
+          strokeColor: color,
+          strokeWeight: 4,
+          strokeOpacity: hasRoute ? 0.85 : 0.55,
+          strokeStyle: hasRoute ? 'solid' : 'dashed',
+          strokeDasharray: hasRoute ? undefined : [6, 6],
+          showDir: true
+        })
+        map.add(polyline)
+
+        const mid = path[Math.floor(path.length / 2)]
+        const modeLabel = routeModeLabel(day.transport_mode)
+        const labelText = hasRoute && route
+          ? `${modeLabel} ${formatDistance(route.distance)} · ${formatDuration(route.time)}`
+          : '路线规划失败 · 直线示意'
+        const label = new AMap.Text({
+          text: labelText,
+          position: mid,
+          anchor: 'center',
+          zIndex: 150,
+          style: {
+            'background-color': 'rgba(255,255,255,0.94)',
+            'border': '1px solid #d9d9e3',
+            'border-radius': '6px',
+            'padding': '2px 6px',
+            'font-size': '11px',
+            'color': '#4b4b5a',
+            'box-shadow': '0 2px 6px rgba(0,0,0,0.08)'
+          }
+        })
+        map.add(label)
+      }
+    }
   } catch (error) {
     console.error('地图加载失败', error)
     message.warning('地图加载失败，行程文字内容仍可正常使用')
