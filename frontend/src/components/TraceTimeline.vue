@@ -1,5 +1,5 @@
 <template>
-  <a-card id="trace" title="🧭 Agent 执行轨迹" :bordered="false" class="trace-card">
+  <a-card id="trace" title="Agent 执行轨迹" :bordered="false" class="trace-card">
     <template #extra>
       <a-tag color="blue">{{ trace.length }} nodes</a-tag>
     </template>
@@ -119,5 +119,84 @@ function metaSummary(event: TraceEvent): string {
   margin-top: 4px;
   color: #8c8c8c;
   font-size: 12px;
+}
+/* ── paper log skin ───────────────────────────────────────────────── */
+.trace-card {
+  overflow: hidden;
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.trace-card :deep(.ant-card-head) {
+  min-height: 52px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+}
+
+.trace-card :deep(.ant-card-head-title) {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+}
+
+.trace-card :deep(.ant-card-body) {
+  padding: 20px;
+}
+
+.trace-card :deep(.ant-card-extra .ant-tag) {
+  border-color: var(--line);
+  border-radius: 1px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.trace-card :deep(.ant-timeline-item-tail) {
+  border-inline-start-color: var(--line-soft);
+}
+
+.trace-card :deep(.ant-timeline-item-head) {
+  background: var(--surface);
+}
+
+.trace-head {
+  gap: 7px;
+  color: var(--ink);
+}
+
+.trace-head strong {
+  font-family: var(--serif);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.trace-head :deep(.ant-tag) {
+  border-color: var(--line-soft);
+  border-radius: 1px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.trace-ms {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.trace-error {
+  color: var(--cinnabar);
+  font-size: 11px;
+}
+
+.trace-meta {
+  color: var(--muted);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 10px;
 }
 </style>

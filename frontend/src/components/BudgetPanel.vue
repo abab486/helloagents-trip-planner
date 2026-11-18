@@ -1,5 +1,5 @@
 <template>
-  <a-card id="budget" title="💰 预算明细" :bordered="false" class="budget-card">
+  <a-card id="budget" title="预算明细" :bordered="false" class="budget-card">
     <div class="budget-total-row">
       <div>
         <div class="total-label">预估总费用</div>
@@ -235,6 +235,147 @@ function sourceColor(source: string): string {
 
   .line-side {
     align-items: flex-start;
+  }
+}
+/* ── paper receipt skin ───────────────────────────────────────────── */
+.budget-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.budget-card :deep(.ant-card-head) {
+  min-height: 52px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+}
+
+.budget-card :deep(.ant-card-head-title) {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+}
+
+.budget-card :deep(.ant-card-body) {
+  padding: 20px;
+}
+
+.budget-total-row {
+  padding: 18px;
+  border-radius: 2px;
+  background: var(--pine-deep);
+  color: var(--surface);
+}
+
+.total-label {
+  color: rgba(255, 253, 248, 0.66);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.total-value {
+  font-family: var(--serif);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.limit-text {
+  color: rgba(255, 253, 248, 0.66);
+  font-size: 10px;
+}
+
+.budget-status :deep(.ant-tag) {
+  border-color: rgba(255, 253, 248, 0.24);
+  border-radius: 1px;
+  background: rgba(255, 253, 248, 0.12);
+  color: var(--surface);
+  font-size: 10px;
+}
+
+.category-grid {
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.category-item {
+  padding: 11px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  background: var(--surface-soft);
+}
+
+.category-label {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.category-value {
+  margin-top: 5px;
+  color: var(--cinnabar);
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.budget-card :deep(.ant-divider) {
+  border-color: var(--line-soft);
+}
+
+.budget-card :deep(.ant-divider-inner-text) {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.budget-lines {
+  gap: 0;
+  max-height: 340px;
+}
+
+.budget-line {
+  padding: 9px 2px;
+  border-bottom: 1px dotted var(--line-soft);
+}
+
+.line-name {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.line-amount {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 14px;
+}
+
+.line-detail {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.budget-line :deep(.ant-tag) {
+  border-color: var(--line-soft);
+  border-radius: 1px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.budget-note {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+@media (max-width: 768px) {
+  .category-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>

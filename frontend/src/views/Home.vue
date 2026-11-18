@@ -7,11 +7,9 @@
     </div>
 
     <div class="page-header">
-      <div class="badge">镇江 · 单城市深度版</div>
+      <div class="hero-kicker">ZHENJIANG · JIANGSU</div>
+      <div class="badge">单城市深度版 · 2026</div>
       <h1 class="page-title">镇江旅行助手</h1>
-      <p class="page-subtitle">
-        确定性 DAG 编排 · 只做镇江 · 每一笔预算都能解释
-      </p>
       <div class="theme-chips">
         <span>三山一渡</span>
         <span>醋都寻味</span>
@@ -23,17 +21,14 @@
       <a-form :model="formData" layout="vertical" @finish="handleSubmit">
         <div class="form-section">
           <div class="section-header">
-            <span class="section-icon">📍</span>
+            <span class="section-icon">01</span>
             <span class="section-title">目的地与日期</span>
           </div>
 
           <a-row :gutter="24">
             <a-col :xs="24" :md="8">
               <a-form-item label="目的地" name="city">
-                <a-input value="镇江" disabled size="large" class="custom-input">
-                  <template #prefix><span class="input-prefix">🏙️</span></template>
-                </a-input>
-                <div class="field-hint">当前版本只支持镇江，先把一个城市做深。</div>
+                <a-input value="镇江" disabled size="large" class="custom-input" />
               </a-form-item>
             </a-col>
             <a-col :xs="12" :md="6">
@@ -77,7 +72,7 @@
 
         <div class="form-section">
           <div class="section-header">
-            <span class="section-icon">⚙️</span>
+            <span class="section-icon">02</span>
             <span class="section-title">出行偏好</span>
           </div>
 
@@ -139,7 +134,7 @@
 
         <div class="form-section">
           <div class="section-header">
-            <span class="section-icon">💰</span>
+            <span class="section-icon">03</span>
             <span class="section-title">预算与额外要求</span>
           </div>
 
@@ -179,8 +174,8 @@
             class="submit-button"
           >
             <template v-if="!loading">
-              <span class="button-icon">🧭</span>
               <span>生成我的镇江行程</span>
+              <span class="button-arrow">→</span>
             </template>
             <template v-else>
               <span>正在生成…</span>
@@ -611,6 +606,371 @@ onBeforeUnmount(stopLoadingClock)
 
   .form-section {
     padding: 14px;
+  }
+}
+/* ── paper journal skin ───────────────────────────────────────────── */
+.home-container {
+  position: relative;
+  overflow: hidden;
+  padding: 0 20px 72px;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(177, 139, 82, 0.13), transparent 30%),
+    radial-gradient(circle at 90% 22%, rgba(47, 90, 74, 0.08), transparent 28%),
+    var(--paper);
+}
+
+.home-container::before {
+  content: '镇';
+  position: absolute;
+  top: 34px;
+  right: -3vw;
+  color: rgba(47, 90, 74, 0.035);
+  font-family: var(--serif);
+  font-size: clamp(220px, 34vw, 520px);
+  line-height: 0.8;
+  pointer-events: none;
+  user-select: none;
+}
+
+.home-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+.bg-decoration {
+  display: none;
+}
+
+.page-header {
+  animation: none !important;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 58px 0 30px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.hero-kicker {
+  margin-bottom: 14px;
+  color: var(--gold);
+  font-size: 10px;
+  letter-spacing: 0.28em;
+}
+
+.badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--pine);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.page-title {
+  margin: 16px 0 10px;
+  color: var(--ink) !important;
+  font-family: var(--serif);
+  font-size: clamp(38px, 5vw, 58px);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.15;
+}
+
+.page-subtitle {
+  margin: 0;
+  color: var(--ink-soft) !important;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+.theme-chips {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.theme-chips span {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--serif);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+
+.form-card {
+  position: relative;
+  max-width: 980px;
+  margin: 34px auto 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow);
+  animation: none !important;
+}
+
+.form-card::before {
+  content: 'TRIP PLANNER / 01';
+  display: block;
+  padding: 7px 40px;
+  background: var(--pine-deep);
+  color: rgba(255, 253, 248, 0.72);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+}
+
+.form-card :deep(.ant-card-body) {
+  padding: 18px 40px 30px;
+}
+
+.form-section {
+  padding: 24px 0 8px;
+  border-top: 1px solid var(--line-soft);
+  background: transparent !important;
+}
+
+.form-section:first-of-type {
+  padding-top: 8px;
+  border-top: 0;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  border-bottom: 0 !important;
+}
+
+.section-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--cinnabar);
+  border-radius: 50%;
+  color: var(--cinnabar);
+  font-family: var(--serif);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.section-title {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.form-card :deep(.ant-form-item) {
+  margin-bottom: 16px;
+}
+
+.form-card :deep(.ant-form-item-label > label) {
+  height: auto;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.form-card :deep(.ant-input),
+.form-card :deep(.ant-input-number),
+.form-card :deep(.ant-input-number-input),
+.form-card :deep(.ant-picker),
+.form-card :deep(.ant-select-selector),
+.form-card :deep(.ant-input-affix-wrapper) {
+  border-color: var(--line) !important;
+  border-radius: 3px !important;
+  background: var(--surface-soft) !important;
+  box-shadow: none !important;
+  color: var(--ink) !important;
+}
+
+.form-card :deep(.ant-input:hover),
+.form-card :deep(.ant-input-number:hover),
+.form-card :deep(.ant-picker:hover),
+.form-card :deep(.ant-select-selector:hover),
+.form-card :deep(.ant-input-affix-wrapper:hover) {
+  border-color: var(--pine) !important;
+}
+
+.form-card :deep(.ant-input:focus),
+.form-card :deep(.ant-input-number-focused),
+.form-card :deep(.ant-picker-focused),
+.form-card :deep(.ant-select-focused .ant-select-selector) {
+  border-color: var(--pine) !important;
+  box-shadow: 0 0 0 2px rgba(47, 90, 74, 0.08) !important;
+}
+
+.form-card :deep(.ant-input[disabled]) {
+  color: var(--pine-deep) !important;
+  font-family: var(--serif);
+  font-size: 17px;
+  letter-spacing: 0.12em;
+}
+
+.field-hint {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.days-display {
+  height: 40px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-soft);
+}
+
+.days-value {
+  color: var(--cinnabar);
+  font-family: var(--serif);
+  font-size: 24px;
+  line-height: 40px;
+}
+
+.days-unit {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.preference-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preference-group :deep(.ant-checkbox-wrapper) {
+  margin-inline-start: 0;
+  padding: 8px 13px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-size: 13px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.preference-group :deep(.ant-checkbox-wrapper:hover) {
+  border-color: var(--pine);
+}
+
+.preference-group :deep(.ant-checkbox-wrapper-checked) {
+  border-color: var(--pine);
+  background: var(--pine-soft);
+  color: var(--pine-deep);
+}
+
+.preference-group :deep(.ant-checkbox-inner) {
+  border-radius: 1px;
+  border-color: var(--line-strong, #c9bba5);
+  background: var(--surface);
+}
+
+.preference-group :deep(.ant-checkbox-checked .ant-checkbox-inner) {
+  border-color: var(--pine);
+  background: var(--pine);
+}
+
+.submit-button {
+  height: 54px;
+  border: 1px solid var(--pine-deep) !important;
+  border-radius: 2px !important;
+  background: var(--pine) !important;
+  box-shadow: none !important;
+  color: var(--surface) !important;
+  font-family: var(--serif);
+  font-size: 16px;
+  letter-spacing: 0.12em;
+}
+
+.submit-button:hover {
+  background: var(--pine-deep) !important;
+}
+
+.button-arrow {
+  margin-left: 10px;
+  font-family: var(--sans);
+  letter-spacing: 0;
+}
+
+.demo-link {
+  margin-top: 4px;
+  text-align: center;
+}
+
+.demo-link :deep(.ant-btn-link) {
+  color: var(--cinnabar);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.loading-container {
+  padding: 4px 0 8px;
+  text-align: center;
+}
+
+.loading-status {
+  margin: 10px 0 4px;
+  color: var(--pine);
+  font-family: var(--serif);
+  font-size: 15px;
+}
+
+.loading-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.footer-note {
+  max-width: 980px;
+  margin: 20px auto 0;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .home-container {
+    padding: 0 14px 48px;
+  }
+
+  .page-header {
+    padding: 38px 0 22px;
+  }
+
+  .page-title {
+    font-size: 38px;
+  }
+
+  .form-card {
+    margin-top: 24px;
+  }
+
+  .form-card::before {
+    padding: 7px 22px;
+  }
+
+  .form-card :deep(.ant-card-body) {
+    padding: 14px 22px 22px;
+  }
+
+  .section-title {
+    font-size: 19px;
   }
 }
 </style>

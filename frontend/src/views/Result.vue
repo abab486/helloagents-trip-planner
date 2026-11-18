@@ -8,20 +8,20 @@
         <a-tag v-if="tripData?.degraded" color="orange">降级结果</a-tag>
 
         <template v-if="!editMode">
-          <a-button @click="toggleEdit">✏️ 编辑行程</a-button>
+          <a-button @click="toggleEdit">编辑行程</a-button>
           <a-dropdown>
             <template #overlay>
               <a-menu>
-                <a-menu-item key="image" @click="exportAsImage">📷 导出图片</a-menu-item>
-                <a-menu-item key="pdf" @click="exportAsPDF">📄 导出 PDF</a-menu-item>
+                <a-menu-item key="image" @click="exportAsImage">导出图片</a-menu-item>
+                <a-menu-item key="pdf" @click="exportAsPDF">导出 PDF</a-menu-item>
               </a-menu>
             </template>
-            <a-button>📥 导出行程 <DownOutlined /></a-button>
+            <a-button>导出行程 <DownOutlined /></a-button>
           </a-dropdown>
         </template>
         <template v-else>
           <a-button type="primary" :loading="recalculating" @click="saveAndRecalculate">
-            💾 保存并重算
+            保存并重算
           </a-button>
           <a-button @click="cancelEdit">取消</a-button>
         </template>
@@ -32,16 +32,16 @@
       <div class="side-nav">
         <a-affix :offset-top="24">
           <a-menu mode="inline" :selected-keys="[activeSection]" @click="scrollToSection">
-            <a-menu-item key="overview">📋 行程概览</a-menu-item>
-            <a-menu-item key="budget">💰 预算明细</a-menu-item>
-            <a-menu-item key="map">📍 景点地图</a-menu-item>
-            <a-sub-menu key="days" title="📅 每日行程">
+            <a-menu-item key="overview">行程概览</a-menu-item>
+            <a-menu-item key="budget">预算明细</a-menu-item>
+            <a-menu-item key="map">景点地图</a-menu-item>
+            <a-sub-menu key="days" title="每日行程">
               <a-menu-item v-for="(day, index) in tripData.days" :key="`day-${index}`">
                 第{{ day.day_index + 1 }}天
               </a-menu-item>
             </a-sub-menu>
-            <a-menu-item v-if="tripData.trace.length" key="trace">🧭 执行轨迹</a-menu-item>
-            <a-menu-item v-if="tripData.weather.length" key="weather">🌤️ 天气参考</a-menu-item>
+            <a-menu-item v-if="tripData.trace.length" key="trace">执行轨迹</a-menu-item>
+            <a-menu-item v-if="tripData.weather.length" key="weather">天气参考</a-menu-item>
           </a-menu>
         </a-affix>
       </div>
@@ -77,27 +77,27 @@
             <a-card id="overview" :title="`${tripData.request.city}旅行计划`" :bordered="false" class="overview-card">
               <div class="overview-list">
                 <div class="overview-row">
-                  <span class="overview-label">📅 日期</span>
+                  <span class="overview-label">日期</span>
                   <span>{{ tripData.request.start_date }} 至 {{ tripData.request.end_date }}（{{ tripData.request.travel_days }} 天）</span>
                 </div>
                 <div class="overview-row">
-                  <span class="overview-label">🎯 主题</span>
+                  <span class="overview-label">主题</span>
                   <span>{{ preferenceText }}</span>
                 </div>
                 <div class="overview-row">
-                  <span class="overview-label">🚇 交通</span>
+                  <span class="overview-label">交通</span>
                   <span>{{ tripData.request.transportation }}</span>
                 </div>
                 <div class="overview-row">
-                  <span class="overview-label">🏨 住宿</span>
+                  <span class="overview-label">住宿</span>
                   <span>{{ tripData.request.accommodation }}</span>
                 </div>
                 <div v-if="meta" class="overview-row meta-row">
-                  <span class="overview-label">🧾 记录</span>
+                  <span class="overview-label">记录</span>
                   <span class="mono">{{ meta.trip_id }} · {{ meta.request_id }}</span>
                 </div>
                 <div v-if="tripData.notes.length" class="overview-row">
-                  <span class="overview-label">💡 说明</span>
+                  <span class="overview-label">说明</span>
                   <span>{{ tripData.notes.join('；') }}</span>
                 </div>
               </div>
@@ -107,7 +107,7 @@
           </div>
 
           <div class="right-map">
-            <a-card id="map" title="📍 景点地图" :bordered="false" class="map-card">
+            <a-card id="map" title="景点地图" :bordered="false" class="map-card">
               <div id="amap-container"></div>
               <p class="map-note">按天分段，步行/公交/驾车路线来自高德；规划失败的段用直线示意。</p>
             </a-card>
@@ -116,7 +116,7 @@
 
         <TraceTimeline :trace="tripData.trace" />
 
-        <a-card v-if="tripData.weather.length" id="weather" title="🌤️ 天气参考" :bordered="false" class="weather-section">
+        <a-card v-if="tripData.weather.length" id="weather" title="天气参考" :bordered="false" class="weather-section">
           <a-row :gutter="[12, 12]">
             <a-col v-for="weather in tripData.weather" :key="weather.date" :xs="24" :md="8">
               <div class="weather-card">
@@ -134,7 +134,7 @@
           </a-row>
         </a-card>
 
-        <a-card title="📅 每日行程" :bordered="false" class="days-card">
+        <a-card title="每日行程" :bordered="false" class="days-card">
           <a-collapse v-model:activeKey="activeDays" accordion>
             <a-collapse-panel
               v-for="(day, index) in tripData.days"
@@ -201,7 +201,7 @@
               </a-list>
 
               <div v-if="day.hotel" class="hotel-block">
-                <div class="block-title">🏨 住宿建议</div>
+                <div class="block-title">住宿建议</div>
                 <div class="hotel-card">
                   <div>
                     <div class="hotel-name">{{ day.hotel.name }}</div>
@@ -212,7 +212,7 @@
               </div>
 
               <div class="meal-block">
-                <div class="block-title">🍽️ 餐饮安排</div>
+                <div class="block-title">餐饮安排</div>
                 <div class="meal-grid">
                   <div v-for="meal in day.meals" :key="`${meal.type}-${meal.restaurant_id}`" class="meal-item">
                     <div class="meal-type">{{ mealLabel(meal.type) }}</div>
@@ -1339,5 +1339,551 @@ async function exportAsPDF() {
   .page-header {
     align-items: flex-start;
   }
+}
+/* ── paper journal skin ───────────────────────────────────────────── */
+.result-container {
+  min-height: 100vh;
+  padding: 30px 24px 64px;
+  background:
+    radial-gradient(circle at 8% 4%, rgba(177, 139, 82, 0.1), transparent 28%),
+    radial-gradient(circle at 92% 8%, rgba(47, 90, 74, 0.07), transparent 24%),
+    var(--paper);
+  color: var(--ink);
+}
+
+.page-header {
+  max-width: 1400px;
+  margin: 0 auto 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.back-button {
+  border-color: var(--line) !important;
+  border-radius: 2px !important;
+  background: transparent !important;
+  color: var(--ink-soft) !important;
+  font-size: 12px;
+}
+
+.page-header :deep(.ant-btn) {
+  border-color: var(--line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink-soft);
+  box-shadow: none;
+}
+
+.page-header :deep(.ant-btn-primary) {
+  border-color: var(--pine);
+  background: var(--pine);
+  color: var(--surface);
+}
+
+.page-header :deep(.ant-btn-primary:hover) {
+  background: var(--pine-deep);
+}
+
+.page-header :deep(.ant-tag) {
+  border-color: var(--line);
+  border-radius: 1px;
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.content-wrapper {
+  gap: 28px;
+}
+
+.side-nav {
+  width: 190px;
+}
+
+.side-nav :deep(.ant-menu) {
+  padding: 8px 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.side-nav :deep(.ant-menu-item),
+.side-nav :deep(.ant-menu-submenu-title) {
+  margin: 2px 8px;
+  border-radius: 2px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.side-nav :deep(.ant-menu-item-selected) {
+  background: var(--pine) !important;
+  color: var(--surface) !important;
+}
+
+.side-nav :deep(.ant-menu-submenu-selected > .ant-menu-submenu-title) {
+  color: var(--pine);
+}
+
+.side-nav :deep(.ant-menu-sub) {
+  background: transparent;
+}
+
+.side-nav :deep(.ant-menu-sub .ant-menu-item) {
+  padding-left: 28px !important;
+  font-size: 11px;
+}
+
+.main-content {
+  min-width: 0;
+}
+
+.top-info-section {
+  gap: 20px;
+}
+
+.left-info {
+  flex: 0 0 390px;
+  gap: 20px;
+}
+
+.top-alert {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-soft);
+}
+
+.top-info-section :deep(.ant-card),
+.weather-section,
+.days-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.top-info-section :deep(.ant-card-head),
+.weather-section :deep(.ant-card-head),
+.days-card :deep(.ant-card-head) {
+  min-height: 52px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent !important;
+}
+
+.top-info-section :deep(.ant-card-head-title),
+.weather-section :deep(.ant-card-head-title),
+.days-card :deep(.ant-card-head-title) {
+  color: var(--ink) !important;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.top-info-section :deep(.ant-card-body),
+.weather-section :deep(.ant-card-body),
+.days-card :deep(.ant-card-body) {
+  padding: 20px;
+}
+
+.overview-card {
+  position: relative;
+}
+
+.overview-card::after {
+  content: '镇';
+  position: absolute;
+  right: 14px;
+  bottom: 4px;
+  color: rgba(47, 90, 74, 0.04);
+  font-family: var(--serif);
+  font-size: 92px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.overview-list {
+  position: relative;
+  z-index: 1;
+  gap: 0;
+}
+
+.overview-row {
+  align-items: baseline;
+  padding: 9px 0;
+  border-bottom: 1px dotted var(--line-soft);
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.overview-row:last-child {
+  border-bottom: 0;
+}
+
+.overview-label {
+  min-width: 42px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.meta-row {
+  border-top: 0;
+}
+
+.mono {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.map-card {
+  min-height: 540px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.map-card :deep(.ant-card-body) {
+  padding: 0;
+}
+
+#amap-container {
+  min-height: 480px;
+  background: #e9e4d9;
+}
+
+.map-note {
+  padding: 9px 16px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+.attraction-list {
+  margin-top: 2px;
+}
+
+.attraction-list :deep(.ant-list-item) {
+  padding: 2px;
+}
+
+.attraction-card {
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.attraction-card :deep(.ant-card-head) {
+  min-height: 48px;
+  padding: 0 15px;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+}
+
+.attraction-card :deep(.ant-card-head-title) {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 17px;
+  letter-spacing: 0.06em;
+}
+
+.attraction-card :deep(.ant-card-body) {
+  padding: 12px 15px 15px;
+}
+
+.attraction-image-wrapper {
+  margin: 0 0 12px;
+  border-radius: 2px;
+}
+
+.attraction-image {
+  height: 185px;
+  filter: saturate(0.82) contrast(0.96);
+}
+
+.attraction-index {
+  top: 9px;
+  left: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 1px;
+  background: var(--cinnabar);
+  font-family: var(--serif);
+  font-size: 12px;
+}
+
+.must-see-badge {
+  border-radius: 1px;
+  background: var(--cinnabar);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.attraction-tags {
+  gap: 4px;
+  margin-bottom: 9px;
+}
+
+.attraction-tags :deep(.ant-tag) {
+  margin: 0;
+  border-color: var(--line-soft);
+  border-radius: 1px;
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.attraction-desc {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.hotel-block,
+.meal-block {
+  margin-top: 16px;
+}
+
+.block-title {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+}
+
+.hotel-card {
+  padding: 13px 15px;
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  background: var(--surface-soft);
+}
+
+.hotel-name {
+  color: var(--pine-deep);
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.hotel-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.hotel-price {
+  color: var(--cinnabar);
+  font-family: var(--serif);
+  font-size: 20px;
+}
+
+.hotel-price span {
+  color: var(--muted);
+}
+
+.meal-grid {
+  gap: 8px;
+}
+
+.meal-item {
+  padding: 11px 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  background: var(--surface-soft);
+}
+
+.meal-type {
+  color: var(--cinnabar);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.meal-name {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 14px;
+}
+
+.meal-meta {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.weather-section {
+  margin-top: 20px;
+}
+
+.weather-card {
+  height: 100%;
+  padding: 15px;
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  background: var(--surface-soft);
+}
+
+.weather-date {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
+
+.weather-icon {
+  font-size: 25px;
+  filter: grayscale(0.35);
+}
+
+.weather-day {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 16px;
+}
+
+.weather-night,
+.weather-rain {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.weather-rain {
+  border-top: 1px dotted var(--line);
+}
+
+.day-header {
+  align-items: baseline;
+}
+
+.day-title {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.day-date {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.day-header :deep(.ant-tag) {
+  border-color: var(--line);
+  border-radius: 1px;
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-size: 10px;
+}
+
+.days-card :deep(.ant-collapse) {
+  border: 0;
+  background: transparent;
+}
+
+.days-card :deep(.ant-collapse-item) {
+  margin-bottom: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.days-card :deep(.ant-collapse-item:last-child) {
+  margin-bottom: 0;
+}
+
+.days-card :deep(.ant-collapse-header) {
+  padding: 14px 16px !important;
+  background: var(--surface-soft);
+}
+
+.days-card :deep(.ant-collapse-content-box) {
+  padding: 16px;
+}
+
+.days-card :deep(.ant-collapse-expand-icon) {
+  color: var(--pine);
+}
+
+.back-top {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--pine);
+  box-shadow: none;
+  font-family: var(--serif);
+  font-size: 18px;
+}
+
+.empty-text {
+  color: var(--muted);
+}
+
+@media (max-width: 1100px) {
+  .left-info {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .map-card {
+    min-height: 440px;
+  }
+
+  #amap-container {
+    min-height: 380px;
+  }
+}
+
+@media (max-width: 768px) {
+  .result-container {
+    padding: 18px 12px 44px;
+  }
+
+  .top-info-section :deep(.ant-card-body),
+  .weather-section :deep(.ant-card-body),
+  .days-card :deep(.ant-card-body) {
+    padding: 14px;
+  }
+
+  .meal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .day-header {
+    align-items: flex-start;
+  }
+
+  .day-header-right {
+    flex-wrap: wrap;
+  }
+}
+.result-container :deep(.ant-card-head-title),
+.result-container :deep(.ant-card-head-title span) {
+  color: var(--ink) !important;
+  font-family: var(--serif);
+}
+
+:deep(.amap-label) {
+  border-radius: 1px;
+  background: var(--cinnabar);
+  font-family: var(--serif);
+}
+
+:deep(.amap-info h4) {
+  font-family: var(--serif);
+  color: var(--ink);
+}
+
+:deep(.amap-info-day) {
+  color: var(--cinnabar);
 }
 </style>
