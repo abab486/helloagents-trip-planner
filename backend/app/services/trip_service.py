@@ -1,9 +1,9 @@
-"""Trip application service: cache, idempotency, rate limit and recalculation.
+"""行程应用服务：缓存、幂等、限流和重算。
 
-This layer owns request-level concerns so the DAG stays pure:
-    - plan cache / idempotency / rate limit
-    - trip snapshot storage (Redis or memory)
-    - recalculate endpoint logic
+这一层专门管"请求级"的脏活，让 DAG 保持纯粹：
+    - 计划缓存 / 幂等 / 限流
+    - 行程快照的存取（Redis 或内存）
+    - 重算接口的逻辑
 """
 
 from __future__ import annotations
@@ -32,22 +32,27 @@ from ..llm.client import LLMConfigError, create_llm_client
 logger = get_logger(__name__)
 
 
+# 限流被挡住时抛它，顺手把"多少秒后再试"带给 router 塞进 Retry-After
 class RateLimitExceeded(RuntimeError):
     def __init__(self, retry_after_s: int = 60) -> None:
         super().__init__("请求过于频繁，请稍后再试")
         self.retry_after_s = retry_after_s
 
 
+# 快照查不到或已过期，重算接口拿它报 404
 class TripNotFound(RuntimeError):
     pass
 
 
+# 校验没过，把 issues 一起抛，router 原样塞进 422 的 detail
 class PlanValidationError(RuntimeError):
     def __init__(self, issues: list[ValidationIssue]) -> None:
         super().__init__("行程校验失败")
         self.issues = issues
 
 
+# 快照：把 request + facts + plan 三样冻在一起
+# 必须存 facts —— 重算要的是"原计划那版数据"，现读 CSV 会和原结果对不上
 class TripSnapshot(BaseModel):
     trip_id: str
     request: TripRequest
@@ -56,6 +61,7 @@ class TripSnapshot(BaseModel):
     created_at: float = Field(default_factory=time.time)
 
 
+# 一次 plan 的返回：结果 + trip_id + 这次是不是命中缓存
 @dataclass
 class PlanOutcome:
     result: TripResult
@@ -63,6 +69,8 @@ class PlanOutcome:
     cached: bool = False
 
 
+# 行程服务的门面，对外只有 plan / recalculate / health / graph
+# 依赖全从构造函数注入，测试里能塞 FakePlanner 和 MemoryCache，不碰真 LLM
 class TripService:
     def __init__(
         self,
@@ -74,7 +82,9 @@ class TripService:
         idem_ttl_s: int = 600,
     ) -> None:
         self._planner = planner
+        # 只防 PlannerAgent 被初始化两次，不限制并发量（这项目没有并发隔离）
         self._planner_lock = threading.Lock()
+        # 没配 REDIS_URL 就退化成进程内字典；多副本部署时限流会按进程各算一份
         self.cache = cache or create_cache()
         self.rate_limit_per_minute = (
             rate_limit_per_minute
@@ -85,8 +95,10 @@ class TripService:
         self.idem_ttl_s = idem_ttl_s
 
     # ------------------------------------------------------------------
-    # Public API
+    # 对外接口
     # ------------------------------------------------------------------
+    # 主流程：幂等 → 限流 → 计划缓存 → 跑 DAG → 写三层缓存
+    # 只有最后一步花钱，前面三道命中就直接返回
     async def plan(
         self,
         request: TripRequest,
@@ -94,8 +106,10 @@ class TripService:
         idempotency_key: str | None = None,
         client_ip: str = "unknown",
     ) -> PlanOutcome:
+        # 请求体哈希：同参数才认缓存，参数变了就得重算
         request_hash = hash_payload(request.model_dump(mode="json"))
 
+        # 幂等：光有 key 不够，哈希也得一致 —— 客户端可能把同一个 key 用在不同请求上
         if idempotency_key:
             cached = self._cache_get(f"idem:{idempotency_key}")
             if cached and cached.get("request_hash") == request_hash:
@@ -109,8 +123,10 @@ class TripService:
                 except (KeyError, ValidationError):
                     logger.warning("幂等缓存损坏，忽略: %s", idempotency_key)
 
+        # 限流放在幂等之后：已经算过的请求重放，不该再吃配额
         self._check_rate_limit(client_ip)
 
+        # 同参数的请求 1 小时内直接复用，这是省钱的主力
         plan_key = f"plan:{request_hash}"
         cached_plan = self._cache_get(plan_key)
         if cached_plan:
@@ -131,6 +147,7 @@ class TripService:
                 except (KeyError, ValidationError):
                     logger.warning("计划缓存损坏，忽略: %s", request_hash)
 
+        # 到这儿才真调模型，也是整条链路唯一超过 1 秒的地方
         planner = self._get_planner()
         result, context = await run_llm_pipeline_context_async(request, planner)
         if context.facts is None or context.plan is None:
@@ -165,6 +182,8 @@ class TripService:
         )
         return PlanOutcome(result=result, trip_id=trip_id, cached=False)
 
+    # 编辑后重算：不调模型，只把 validate / budget / render 再跑一遍
+    # facts 取自快照而不是现读 CSV，保证跟原计划用同一版数据
     async def recalculate(
         self,
         trip_id: str,
@@ -174,6 +193,7 @@ class TripService:
         if snapshot is None:
             raise TripNotFound(f"行程不存在或已过期: {trip_id}")
 
+        # 不传新计划就按原计划重算，等于只刷新一次预算
         plan = plan_override or snapshot.plan
         validation = validate_plan(plan, snapshot.facts, snapshot.request)
         if not validation.passed:
@@ -186,6 +206,8 @@ class TripService:
             validation=validation,
         )
 
+        # 注意：started 打在 validate_plan 跑完之后，所以这条 trace 恒为 0.00ms
+        # 下面 budget / render 两条的 started 在调用之前，是对的
         started = time.perf_counter()
         context.record(
             "validate",
@@ -231,6 +253,8 @@ class TripService:
         )
         return PlanOutcome(result=result, trip_id=trip_id, cached=False)
 
+    # 给运维看的：用哪个缓存后端、模型配没配、图里几个节点
+    # 注意 graph_nodes 是每次调用都重建一遍图数出来的，健康检查频繁调有点浪费
     def health(self) -> dict[str, Any]:
         return {
             "status": "ok",
@@ -243,12 +267,15 @@ class TripService:
             "graph_nodes": len(build_llm_graph(None)),
         }
 
+    # 把 DAG 导成 Mermaid 文本，前端拿去渲染成图（同样是每次重建图）
     def graph_mermaid(self) -> str:
         return build_llm_graph(None).to_mermaid()
 
     # ------------------------------------------------------------------
-    # Internals
+    # 内部实现
     # ------------------------------------------------------------------
+    # 懒加载 PlannerAgent：第一次调用才建 LLM 客户端，没配 key 就抛 LLMConfigError
+    # 双检锁是 Java 那套习惯，Python 里其实一把普通锁就够
     def _get_planner(self) -> PlannerAgent:
         if self._planner is not None:
             return self._planner
@@ -260,6 +287,8 @@ class TripService:
                     raise
         return self._planner
 
+    # 按 IP + 分钟固定窗口计数，key 里带分钟数，天然按窗口过期
+    # 缓存挂了直接放行（可用性优先），所以 Redis 故障时等于没限流
     def _check_rate_limit(self, client_ip: str) -> None:
         if self.rate_limit_per_minute <= 0:
             return
@@ -273,6 +302,7 @@ class TripService:
         if count > self.rate_limit_per_minute:
             raise RateLimitExceeded()
 
+    # 读快照：反序列化失败当"过期"处理，不让脏数据冒到上层
     def _load_snapshot(self, trip_id: str) -> TripSnapshot | None:
         if not trip_id:
             return None
@@ -285,6 +315,7 @@ class TripService:
             logger.warning("行程快照损坏: %s", trip_id)
             return None
 
+    # 存快照，TTL 跟计划缓存一致；重算接口就靠它拿 facts
     def _save_snapshot(self, snapshot: TripSnapshot) -> None:
         self._cache_set(
             f"trip:{snapshot.trip_id}",
@@ -292,6 +323,7 @@ class TripService:
             self.plan_ttl_s,
         )
 
+    # 写幂等键，同时把请求体哈希记下来，下次来要比对
     def _remember_idempotency(
         self,
         key: str,
@@ -309,6 +341,7 @@ class TripService:
             self.idem_ttl_s,
         )
 
+    # 缓存读的统一入口：出错只记日志不抛，缓存本来就可有可无
     def _cache_get(self, key: str) -> dict[str, Any] | None:
         try:
             return self.cache.get_json(key)
@@ -316,6 +349,7 @@ class TripService:
             logger.warning("缓存读取失败 %s: %s", key, exc)
             return None
 
+    # 同上，写失败也不影响这次请求的结果
     def _cache_set(self, key: str, value: dict[str, Any], ttl_s: int) -> None:
         try:
             self.cache.set_json(key, value, ttl_s)
@@ -323,10 +357,12 @@ class TripService:
             logger.warning("缓存写入失败 %s: %s", key, exc)
 
 
+# 模块级单例：全进程共用一个 TripService（也就共用一个 PlannerAgent）
 _service: TripService | None = None
 _service_lock = threading.Lock()
 
 
+# 拿单例，双检锁防止并发首次调用建出两个
 def get_trip_service() -> TripService:
     global _service
     if _service is None:
